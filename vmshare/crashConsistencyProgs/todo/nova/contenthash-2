@@ -1,0 +1,8 @@
+r0 = open(&(0x7f00000002c0)='./file0\x00', 0x401, 0x0)
+fallocate(r0, 0x1, 0x0, 0x5)
+ftruncate(r0, 0x0)
+r1 = open(&(0x7f0000000040)='./file0\x00', 0x1, 0x0)
+write(r1, &(0x7f0000000080)="8f3e3747c4441f4cc609eee0d0025cda1aa659f3ba24f0897fb0e03351312c69d1ae05f6cbd57f161442dea2e64a791ecba34408cd7712b9643f2c7986d7956dbf5c9b6c295004da3295643dc22b0df2e684acbae24e", 0x56)
+fallocate(r1, 0x0, 0x0, 0x7a)
+open(&(0x7f0000000000)='./file0\x00', 0x100, 0x1c2)
+fallocate(r1, 0x0, 0xfffffffffffffc00, 0x5)

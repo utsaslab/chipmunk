@@ -1,0 +1,3 @@
+./executor.cc:#define SYSCALLAPI
+./executor.cc:#define SYSCALLAPI WINAPI
+./executor.cc:typedef intptr_t(SYSCALLAPI* syscall_t)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t);

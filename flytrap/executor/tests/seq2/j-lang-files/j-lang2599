@@ -1,0 +1,33 @@
+# define
+test
+A
+A/C
+B
+foo
+bar
+A/foo
+A/bar
+B/foo
+B/bar
+A/C/foo
+A/C/bar
+
+# declare
+local_checkpoint
+
+# setup
+
+
+# run
+mkdir A 0777
+open Afoo O_RDWR|O_CREAT 0777
+close Afoo
+rename Afoo Abar
+
+mkdir B 0777
+opendir B 0777
+close B
+mark
+rename B AC
+none
+checkpoint 0

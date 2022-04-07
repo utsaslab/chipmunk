@@ -1,0 +1,81 @@
+config NOVA_FS
+	tristate "NOVA: log-structured file system for non-volatile memories"
+	depends on FS_DAX
+	depends on LIBNVDIMM
+	select CRC32
+	select LIBCRC32C
+	help
+	  If your system has a block of fast (comparable in access speed to
+	  system memory) and non-volatile byte-addressable memory and you wish
+	  to mount a light-weight filesystem with strong consistency support
+	  over it, say Y here.
+
+	  To compile this as a module, choose M here: the module will be
+	  called nova.
+
+	  If unsure, say N.
+
+menu "PM file system bugs"
+
+config NOVA_BUG1
+	bool "NOVA bug 1"
+	help
+	  Inject NOVA bug \#1 into the system. This bug causes NOVA to use perform an 
+	  out-of-bounds array access on a system with 1 CPU, which results in a null 
+	  pointer dereference. This bug causes a kernel panic, so it should be turned off
+	  if you are looking to reproduce any other bugs.
+
+config NOVA_BUG2
+	bool "NOVA bug 2"
+	help 
+	  Inject NOVA bug \#2 into the system. This bug occurs due to a missing cache line 
+	  flush and results in an inaccessible file. 
+
+config NOVA_BUG3
+	bool "NOVA bug 3"
+	help
+	  Inject NOVA bug \#3 into the system. This bug occurs due to incorrect assumptions 
+	  in recovery code about inode log pointer management and causes a null pointer 
+	  dereference. This bug causes a kernel panic, so it should be turned off if you
+	  are looking to reproduce any other bugs.
+
+config NOVA_BUG4
+	bool "NOVA bug 4"
+	help
+	  Inject NOVA bug \#4 into the system. This bug occurs because the removal of the 
+	  old dentry is not properly journaled during rename(). It results in file loss
+	  if the system crashes while renaming a file.
+
+config NOVA_BUG5
+	bool "NOVA bug 5"
+	help
+	  Inject NOVA bug \#5 into the system. This bug occurs because certain values 
+	  associated with dentries are not included in journal entries. It leaves a file 
+	  inaccessible and corrupted if the system crashes while renaming a file.
+
+config NOVA_FORTIS_BUG1
+	bool "NOVA-Fortis bug 1"
+	help 
+		Inject NOVA-Fortis bug \#1 into the system. TODO: description
+
+config NOVA_FORTIS_BUG2
+	bool "NOVA-Fortis bug 2"
+	help
+	  Inject NOVA-Fortis bug \#2 into the system. TODO: description
+
+config PMFS_BUG1
+	bool "PMFS bug 1"
+	help 
+	  Inject PMFS bug \#1 into the system. TODO: description
+
+config WINEFS_BUG1
+	bool "WineFS bug 1"
+	help 
+	  Inject WineFS bug \#1 into the system. TODO: description
+
+config WINEFS_BUG4
+	bool "WineFS bug 4"
+	help
+	  Inject WineFS bug \#4 into the system. TODO: description
+
+endmenu # "NOVA bugs"
