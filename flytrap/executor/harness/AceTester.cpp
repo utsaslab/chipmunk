@@ -20,7 +20,6 @@
 #include <sys/sendfile.h>
 
 #include "AceTester.h"
-#include "DiskContents.h"
 #include "DiskState.h"
 
 #define TEST_CLASS_FACTORY        "test_case_get_instance"

@@ -22,7 +22,6 @@
 
 #include "Tester.h"
 #include "SyzTester.h"
-#include "DiskContents.h"
 #include "../cov_filter_2.h"
 
 namespace fs_testing {
@@ -137,7 +136,7 @@ int SyzTester::cleanup(ofstream& log) {
 
     // sleep(1); // give some time for previous work using the logger to finish up
 
-    for (int i = 0; i < undo_log.size(); i++) {
+    for (unsigned int i = 0; i < undo_log.size(); i++) {
         free(undo_log[i]->data);
         free(undo_log[i]->metadata);
         free(undo_log[i]);

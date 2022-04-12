@@ -283,16 +283,16 @@ int DiskMod::SerializeDataRange(char *buf, const unsigned int buf_offset,
   return (2 * sizeof(uint64_t)) + dm.file_mod_len;
 }
 
-int DiskMod::SerializeDirectoryMod(char *buf, const unsigned int buf_offset,
-    DiskMod &dm) {
-  // assert(0 && "Not implemented");
-  // buf += buf_offset;
-  // unsigned int size = dm.new_path.size() + 1;
-  // memcpy(buf, dm.new_path.c_str(), size);
-  // buf += size;
+// int DiskMod::SerializeDirectoryMod(char *buf, const unsigned int buf_offset,
+//     DiskMod &dm) {
+//   // assert(0 && "Not implemented");
+//   // buf += buf_offset;
+//   // unsigned int size = dm.new_path.size() + 1;
+//   // memcpy(buf, dm.new_path.c_str(), size);
+//   // buf += size;
 
-  // return size;
-}
+//   // return size;
+// }
 
 int DiskMod::SerializeNewPath(char *buf, const unsigned int buf_offset,
     DiskMod &dm) {

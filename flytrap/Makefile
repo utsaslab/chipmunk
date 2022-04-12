@@ -155,7 +155,7 @@ endif
 
 all: host target
 host: manager runtest repro mutate prog2c db upgrade
-target: fuzzer execprog stress executor executor_cc executor_ace loggers seq1_tests
+target: fuzzer execprog stress executor_cc executor_ace loggers seq1_tests
 executor: descriptions
 ifneq ("$(BUILDOS)", "$(NATIVEBUILDOS)")
 	$(info ************************************************************************************)
@@ -195,7 +195,6 @@ else
 	g++ -o ./bin/$(TARGETOS)_$(TARGETARCH)/syz-executor_cc$(EXE) executor/executor_cc.cc \
 		executor/harness/Tester.cpp \
 		executor/harness/SyzTester.cpp \
-		executor/harness/DiskContents.cpp \
 		executor/harness/FileState.cpp \
 		executor/harness/DiskState.cpp \
 		executor/utils/DiskMod.cpp executor/results/DataTestResult.cpp \
@@ -203,7 +202,7 @@ else
 		executor/results/FileSystemTestResult.cpp \
 		executor/user_tools/src/actions.cpp \
 		executor/user_tools/src/wrapper.cpp \
-		$(ADDCFLAGS) -Wno-unused-function -Wno-unused-result -DGOOS_$(TARGETOS)=1 -DGOARCH_$(TARGETARCH)=1 \
+		$(ADDCFLAGS) -Wno-unused-function -Wno-unused-result -Wno-sign-compare -DGOOS_$(TARGETOS)=1 -DGOARCH_$(TARGETARCH)=1 \
 		-DHOSTGOOS_$(HOSTOS)=1 -DGIT_REVISION=\"$(REV)\"
 endif
 endif
@@ -503,7 +502,6 @@ check_shebang:
 	./tools/check-shebang.sh
 
 $(BUILD_DIR)/ace-executor_cc: \
-			executor/harness/DiskContents.cpp \
 		executor/harness/test_harness.cpp \
 		executor/harness/AceTester.cpp \
 		executor/harness/DiskState.cpp \

@@ -88,11 +88,6 @@ int FileState::set_content_hash(ofstream& diff_file) {
 
     // read the file. assumes we have already called lstat and can get 
     // the total size from there
-    off_t size = statbuf.st_size + 1;
-    // int fd;
-    size_t bytes_read = 0;
-    size_t offset = 0;
-    size_t bytes_to_read = size;
     string contents_str;
     FILE *fp;
     char md5[100];
@@ -137,7 +132,6 @@ int FileState::init_crash_file_state(string p, ofstream& diff_file) {
 }
 
 int FileState::init_file_state(string p, bool deleted, bool fsync, bool fdatasync, ofstream& diff_file) {
-    int ret;
     path = fix_filepath(p);
     present = !deleted;
     fsynced = fsync;
@@ -300,49 +294,6 @@ bool FileState::compare(FileState* compare_state, ofstream& diff_file) {
         diff_file << "Content hash mismatch between " << path << " and " << compare_state->path << endl;
         diff_file << "oracle hash for " << compare_state->path << ": " << compare_state->content_hash << endl;
         diff_file << "crash hash for " << path << ":" << content_hash << endl;
-
-        // char buf[4097];
-        // int bytes = statbuf.st_size;
-        // int to_read = bytes > 4096 ? 4096 : bytes;
-        // int fd = open(path.c_str(), O_RDONLY);
-        // if (fd < 0) {
-        //     diff_file << "Unable to open " << path << endl;
-        //     return false;
-        // }
-        // diff_file << path << " contents: " << endl;
-        // while (to_read > 0) {
-        //     memset(buf, 0, 4097);
-        //     int bytes_read = read(fd, buf, to_read);
-        //     if (bytes_read < 0) {
-        //         diff_file << "unable to read " << path << endl;
-        //         return false;
-        //     }
-        //     to_read -= bytes_read;
-        //     string s(buf);
-        //     diff_file << s;
-        //     memset(buf, 0, 4097);
-        // }
-        // diff_file << endl;
-        // close(fd);
-        // fd = open(compare_state->path.c_str(), O_RDONLY);
-        // if (fd < 0) {
-        //     diff_file << "Undable to open " << compare_state->path << endl;
-        //     return false;
-        // }
-        // diff_file << compare_state->path << " contents: " << endl;
-        // while (to_read > 0) {
-        //     memset(buf, 0, 4097);
-        //     int bytes_read = read(fd, buf, to_read);
-        //     if (bytes_read < 0) {
-        //         diff_file << "unable to read " << path << endl;
-        //         return false;
-        //     }
-        //     to_read -= bytes_read;
-        //     string s(buf);
-        //     diff_file << s;
-        // }
-        // diff_file << endl;
-        // close(fd);
         return false;
     }
     return true;

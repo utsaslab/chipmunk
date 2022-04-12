@@ -854,7 +854,7 @@ int RecordCmFsOps::CmClose(const int fd) {
     DiskMod mod;
     mod.mod_type = DiskMod::kCloseMod;
     mod.mod_opts = DiskMod::kNoneOpt;
-    mod.return_value = -1;
+    mod.return_value = res;
     mods_.push_back(mod);
     return -1;
   }

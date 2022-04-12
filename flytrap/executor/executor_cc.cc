@@ -223,8 +223,6 @@ const uint64 binary_format_strdec = 2;
 const uint64 binary_format_strhex = 3;
 const uint64 binary_format_stroct = 4;
 
-static int num_threads;
-
 const uint64 no_copyout = -1;
 
 static bool collide;
@@ -240,7 +238,6 @@ static const uint64 arg_csum_inet = 0;
 // Checksum chunk kinds.
 static const uint64 arg_csum_chunk_data = 0;
 static const uint64 arg_csum_chunk_const = 1;
-static bool check_data = false;
 
 static constexpr char kChangePath[] = "/root/tmpdir/run_changes";
 
@@ -763,9 +760,6 @@ int run_test()
 		cover_open(&threads[0].mount_cov, false);
 		cover_enable(&threads[0].mount_cov, false, false);
 	}
-	debug("RUN TEST\n");
-    // ret = syz_tester->test_init_values(mount_point, pm_size, num_threads);
-	debug("INIT VALUES\n");
 	for (;;iter++) {
 		ret = syz_tester->resetLogger();
 		if (ret < 0) {
@@ -789,12 +783,11 @@ int run_test()
                                 std::string(""), 0, 1, false,
 								(unsigned long) input_data, output_data_mount, flag_collect_cover, flag_dedup_cover, &threads[0], mountCov,
 								replay_pm_start, instanceId, max_k);
-		debug("LOOP RET: %d\n", ret);
 	} 
 }
 
 int test_loop() {
-	int checkpoint, ret, change_fd, fd, status;
+	int ret, change_fd, fd, status;
     pid_t child, waitres;
 	std::string test_name;
 
@@ -850,7 +843,6 @@ int test_loop() {
         log << "Unable to open IOCTL device; is logger module loaded?" << endl;
         syz_tester->cleanup(log);
 		log.close();
-		close(change_fd);
 		reply_execute(1);
         return fd;
     }
@@ -865,7 +857,6 @@ int test_loop() {
         close(fd);
         syz_tester->cleanup(log);
 		log.close();
-		close(change_fd);
 		reply_execute(1);
         return ret;
     }
@@ -877,7 +868,6 @@ int test_loop() {
         close(fd);
         syz_tester->cleanup(log);
 		log.close();
-		close(change_fd);
 		reply_execute(1);
         return ret;
     }
@@ -889,7 +879,6 @@ int test_loop() {
         close(fd);
         syz_tester->cleanup(log);
         log.close();
-		close(change_fd);
         return ret;
     }
 
@@ -902,14 +891,9 @@ int test_loop() {
         syz_tester->cleanup(log);
 		log.close();
 		reply_execute(1);
-		close(change_fd);
         return ret;
     }
     close(fd); // TODO: do we have to close it here? Maybe not, but do this for now to avoid issues with child process writing checkpoints
-
-
-
-
 
 	// mount the FS, making sure to create a new one since we haven't copied anything in
 	ret = syz_tester->mount_fs(true);
@@ -923,7 +907,6 @@ int test_loop() {
 	} else {
 		log << "Successfully mounted" << endl;
 	}
-	debug("MOUNTED\n");
 
 	// fork a process to run the entire workload
 	child = fork();
@@ -1010,7 +993,6 @@ int test_loop() {
         syz_tester->cleanup(log);
 		log.close();
 		reply_execute(0);
-		close(change_fd);
         return fd;
     }
 
@@ -1021,7 +1003,6 @@ int test_loop() {
         close(fd);
         syz_tester->cleanup(log);
         log.close();
-		close(change_fd);
         return ret;
     }
 
@@ -1033,7 +1014,6 @@ int test_loop() {
 		log.close();
 		close(fd);
 		reply_execute(0);
-		close(change_fd);
         return 2; // indicates that we failed specifically due to kprobe issue so the python wrapper can handle it
     }
 
@@ -1045,7 +1025,6 @@ int test_loop() {
 		syz_tester->cleanup(log);
 		log.close();
 		reply_execute(0);
-		close(change_fd);
         return ret;
     }
 
@@ -1082,18 +1061,6 @@ int test_loop() {
 		log.close();
 		reply_execute(1);
         return ret;
-    }
-
-	if (check_data) {
-        ret = syz_tester->create_oracle_files();
-        if (ret < 0) {
-            log << "Error creating oracle files" << endl;
-            close(change_fd);
-            syz_tester->cleanup(log);
-			log.close();
-            log.close();
-            return ret;
-        }
     }
 
     close(fd);
@@ -1863,7 +1830,6 @@ intptr_t execute_cc_syscall(const call_t* call, intptr_t args[kMaxArgs]) {
         case SYS_fallocate:
 			offset = (unsigned long)args[2];
 		 	len = (unsigned long)args[3];
-			debug("FALLOC LEN: %d\n", len);
 			offset = offset > max_change ? max_change : offset;
 			len = len > max_change ? max_change : len;
 			mode = (int)args[1];

@@ -10,7 +10,6 @@
 #include "../tests/BaseTestCase.h"
 #include "../results/TestSuiteResult.h"
 #include "../ioctl.h"
-#include "DiskContents.h"
 #include "DiskState.h"
 
 #define CACHELINE_SIZE 64
@@ -60,8 +59,6 @@ public:
 
     void free_queue(std::vector<struct write_op *> &q);
 
-    int create_oracle_files();
-
     int replay(std::ofstream &log, int checkpoint, std::string test_name, bool make_trace, bool reorder);
 
     // TODO: do we still need these? fuzzer shouldn't, so make them virtual?
@@ -86,8 +83,6 @@ public:
     int make_replay(std::string test_name, std::string replay_path, std::string replica_path,
                         std::vector<struct write_op *> writes, std::ofstream &log);
 
-    // bool run_check(std::string test_name, std::string replay_device_path, std::string replay_mount_point,
-    //                 std::string replay_img_path, std::ofstream &log, int checkpoint, bool final);
     bool run_check(std::string test_name, std::ofstream& log, int checkpoint, bool syscall_finished);
 
 
@@ -99,7 +94,6 @@ public:
     
     int play_undo_log(int fd_replay, std::ofstream& log);
 
-    bool check_fs_contents(int checkpoint, std::ofstream &diff_file, bool final);
     bool check_fs_contents2(int checkpoint, std::ofstream& diff_file, std::ofstream& log, bool syscall_finished);
     int make_and_check_crash_states(int fd_replay, int fd, int checkpoint, std::ofstream& log, std::string test_name, std::ofstream& trace_file, bool make_trace, int &mod_index, bool reorder);
     int check_crash_state(int fd_replay, std::string test_name, std::ofstream& log, int checkpoint, bool reorder, bool syscall_finished);
@@ -155,9 +149,6 @@ protected:
     bool fs_mounted = false;
     int sfence_count;
     int num_data_write_images;
-
-    std::string pre_test = "oracles/pre_test";
-    std::string post_test = "oracles/post_test";
 
     std::string base_replay_path;
     std::string diff_path;

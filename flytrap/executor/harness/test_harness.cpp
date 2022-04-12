@@ -39,7 +39,7 @@ using fs_testing::Tester;
 using fs_testing::AceTester;
 // using fs_testing::SyzkallerTester;
 
-#define OPTSTRING "a:s:b:r:p:d:q:u:m:hvk:tcf:Do:M:n:A:"
+#define OPTSTRING "a:s:b:r:p:d:q:u:m:hvk:tf:Do:M:n:A:"
 
 // constants to help copy file system images around
 #define ZERO1 "dd if=/dev/zero of="
@@ -85,7 +85,7 @@ static const option long_options[] = {
     {"kernel", required_argument, NULL, 'k'},
     {"make-trace", no_argument, NULL, 't'},
     {"tester", required_argument, NULL, 'q'},
-    {"reorder", no_argument, NULL, 'c'},
+    // {"reorder", no_argument, NULL, 'c'},
     {"fs-type", required_argument, NULL, 'f'},
     {"check-data", no_argument, NULL, 'D'},
     {"mount-opts", required_argument, NULL, 'o'},
@@ -168,9 +168,6 @@ int main(int argc, char* argv[]) {
             case 't':
                 make_trace = true;
                 break;
-            case 'c':
-                reorder = true;
-                break;
             case 'f':
                 fs = string(optarg);
                 break;
@@ -190,8 +187,6 @@ int main(int argc, char* argv[]) {
             case 'h':
                 printf("print help\n");
                 return 0;
-            // default:
-            //     return -1;
         }
         opterr = 0;
     }
@@ -199,7 +194,7 @@ int main(int argc, char* argv[]) {
     // TODO: check that pm_device and replay_device_path are actually DAX devices that NOVA can be mounted on
 
     if (testerType == "syz") {
-        assert(0 && "syzkaller tester is not supported right now");
+        assert(0 && "syzkaller tester is not supported by the ACE test harness right now");
     }
 
     string fs_type;
@@ -219,8 +214,6 @@ int main(int argc, char* argv[]) {
 		cout << "failed to load fs module" << endl;
         return r;
 	}
-    // r = system("insmod /root/syzkallerBinaries/linux_amd64/loggers/logger-nova.ko");
-    // command = "insmod /root/syzkallerBinaries/linux_amd64/loggers/logger-" + fs_type + ".ko";
     command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-" + fs_type + ".ko";
     r = system(command.c_str());
 	if (r < 0) {
@@ -265,17 +258,12 @@ int main(int argc, char* argv[]) {
             logfile.close();
             return -1;
         }
-        // similarly, since ext4 dax is not synchronous like the other systems we test,
-        // we can't do brute force testing
-        if (reorder) {
-            cout << "Brute-force testing is not supported for EXT4-DAX" << endl;
-            logfile << "Brute-force testing is not supported for EXT4-DAX" << endl;
-            logfile.close();
-            return -1;
-        }
+    } else {
+        reorder = true;
     }
 
     logfile << "# of CPUs: " << std::thread::hardware_concurrency() << endl;
+    logfile << "File system: " << fs << endl;
     logfile << "Mount opts: " << mount_opts << endl;
 
     // TODO: write any kind of error to the logfile (perror, etc)
@@ -293,16 +281,9 @@ int main(int argc, char* argv[]) {
 
     Tester* tester;
     logfile << "TEST TYPE: " << testerType << endl;
-    // if (testerType == "syz") {
-    //   logfile << "CALLING SYZKALLER TESTER" << endl;
-    //   tester = new SyzkallerTester(pm_device, replay_device_path, mount_point, replay_mount_point,
-    //                                pm_start, pm_size, kernel, fs, check_data, mount_opts, mod_addr,
-    //                                num_threads, coverage, replay_pm_start);
-    // } else {
       tester = new AceTester(pm_device, replay_device_path, mount_point, replay_mount_point,
                              pm_start, pm_size, kernel, fs, check_data, mount_opts, mod_addr,
                              num_threads, coverage, replay_pm_start, max_k);
-    // }
     tester->set_test_name(test_name); // TODO: include sequence length?
 
 
@@ -487,20 +468,20 @@ int main(int argc, char* argv[]) {
     logfile << "time to read disk mods " << elapsed.count() << endl;
     logfile << "----------------------------" << endl;
 
-    // now that we have profiled, we can create oracle files for files that had data writes
-    // only do this if the check_data option is set; if it's not, we aren't checking for data 
-    // atomicity, so there's no reason to create oracles
-    // TODO: remove this
-    if (check_data) {
-        ret = tester->create_oracle_files();
-        if (ret < 0) {
-            logfile << "Error creating oracle files" << endl;
-            close(change_fd);
-            tester->cleanup(logfile);
-            logfile.close();
-            return ret;
-        }
-    }
+    // // now that we have profiled, we can create oracle files for files that had data writes
+    // // only do this if the check_data option is set; if it's not, we aren't checking for data 
+    // // atomicity, so there's no reason to create oracles
+    // // TODO: remove this
+    // if (check_data) {
+    //     ret = tester->create_oracle_files();
+    //     if (ret < 0) {
+    //         logfile << "Error creating oracle files" << endl;
+    //         close(change_fd);
+    //         tester->cleanup(logfile);
+    //         logfile.close();
+    //         return ret;
+    //     }
+    // }
 
     if (verbose) {
         printf("Running replay and checking for bugs\n");

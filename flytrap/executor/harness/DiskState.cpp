@@ -32,7 +32,7 @@ DiskState::DiskState(string device_path, string mnt_point, string r_mnt) {
 DiskState::~DiskState() {
     for (set<string>::iterator it = files.begin(); it != files.end(); it++) {
         string path = *it;
-        for (int i = 0; i < contents[path].size(); i++) {
+        for (unsigned int i = 0; i < contents[path].size(); i++) {
             delete(contents[path][i]);
         }
     }
@@ -41,17 +41,9 @@ DiskState::~DiskState() {
 // obtains the canonical version of the given path as well as the relative version
 // with the mount point omitted
 int DiskState::get_paths(string path, struct paths& out_paths, ofstream& log) {
-    // char pathbuf[4096];
     int ret;
     string canonical_path, relative_path;
-    // char* retptr = realpath(path.c_str(), pathbuf);
-    // if (retptr == NULL) {
-    //     // chances are, if we can't use realpath, the file just doesn't exist.
-    //     // fall back on the manual functions to fix the string
     canonical_path = fix_filepath(path);
-    // }
-    // canonical_path = string(pathbuf);
-    // canonical_path = path;
     ret = get_relative_path(canonical_path, relative_path);
     if (ret < 0) {
         log << "Bad test program - path points outside of PM file system" << endl;
@@ -938,7 +930,7 @@ bool DiskState::check_file(string path, set<string> skip_files, set<string> link
                 }
 
                 struct dirent* dir_entry;
-                while (dir_entry = readdir(directory)) {
+                while ((dir_entry = readdir(directory))) {
                     if ((strcmp(dir_entry->d_name, ".") == 0) ||
                         (strcmp(dir_entry->d_name, "..") == 0)) {
                         continue;

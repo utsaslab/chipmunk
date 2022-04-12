@@ -19,9 +19,9 @@
 #include <cassert>
 #include <chrono>
 #include <thread>
+#include <sys/syscall.h>
 
 #include "Tester.h"
-#include "DiskContents.h"
 #include "DiskState.h"
 
 namespace fs_testing {
@@ -128,136 +128,6 @@ void Tester::free_queue(vector<struct write_op*> &q) {
         free(q[i]);
     }
     q.clear();
-}
-
-// TODO: what if more than one file is written to during the test?
-// TODO: if a file is renamed or unlinked, maybe its oracle should reflect that
-// Is this necessary anymore?
-int Tester::create_oracle_files() {
-    int ret, fd_pre, fd_post;
-    bool mark_set = false;
-    vector<string> filenames;
-
-    // go through and delete previous tests
-    struct dirent *entry;
-    DIR* d;
-    d = opendir("oracles/");
-    if (d == NULL) {
-        perror("opendir");
-        return -1;
-    }
-    while ((entry = readdir(d))) {
-        // if (entry->d_name != ".gitignore")
-        if (entry->d_name[0] != '.')
-            filenames.push_back(entry->d_name);
-    }
-
-    for (unsigned int i = 0; i < filenames.size(); i++) {
-        string full_path = "oracles/" + filenames[i];
-        ret = remove(full_path.c_str());
-        if (ret < 0) {
-            perror("remove 4");
-            return -1;
-        }
-    }
-
-    for (unsigned int i = 0; i < mods_.size(); i++) {
-        for (unsigned int j = 0; j < mods_[i].size(); j++) {
-            DiskMod mod = mods_[i][j];
-            string path(mod.path);
-            path.erase(0,device_mount_point.length());
-
-            // make a modified path name that we can use to form an oracle file
-            string path2(path);
-            for (unsigned int k = 0; k < path2.size(); k++) {
-                if (path2[k] == '/') {
-                    path2[k] = '-';
-                }
-            }
-            string oracle_path = pre_test + path2;
-
-            fd_pre = open(oracle_path.c_str(), O_WRONLY|O_CREAT, 0777);
-            if (fd_pre < 0) {
-                return -1;
-            }
-
-            // if we have a mod indicating a data write, write the modified data to the correct location in the oracle files
-            if ((mod.mod_type == DiskMod::kDataMod || mod.mod_type == DiskMod::kDataMetadataMod) && mod.mod_opts == DiskMod::kNoneOpt) {
-                // if mark is not set, make modifications to pre-test oracle
-                if (!mark_set) {
-                    
-                    ret = pwrite(fd_pre, (void*)(mod.file_mod_data.get()), mod.file_mod_len, mod.file_mod_location);
-                    if (ret < 0) {
-                        perror("pwrite 1");
-                        close(fd_pre);
-                        close(fd_post);
-                        return -1;
-                    }
-                    close(fd_pre);
-                }
-                // if mark is set, make modifications to post-test oracle
-                // there should be at most 1 data modification after the mark, so 
-                // it's safe to copy over the pre-oracle into the post-oracle 
-                // when we hit this point; we shouldn't overwrite anything important
-                else {
-                    // copy contents of pre_test into post_test
-                    ifstream infile(pre_test + path2, std::ios::binary);
-                    ofstream outfile(post_test + path2, std::ios::binary);
-                    outfile << infile.rdbuf();
-                    infile.close();
-                    outfile.close();
-                    fd_post = open((post_test + path2).c_str(), O_RDWR);
-                    if (fd_post < 0) {
-                        perror("post open");
-                        return -1;
-                    }
-                    ret = pwrite(fd_post, (void*)(mod.file_mod_data.get()), mod.file_mod_len, mod.file_mod_location);
-                    if (ret < 0) {
-                        perror("pwrite 5");
-                        close(fd_pre);
-                        close(fd_post);
-                        return -1;
-                    }
-                }
-            }
-            else if (mod.mod_type == DiskMod::kDataMetadataMod && mod.mod_opts == DiskMod::kTruncateOpt) {
-                // truncate the oracle file
-                if (!mark_set) {
-                    ret = ftruncate(fd_pre, mod.file_mod_len);
-                    if (ret < 0) {
-                        close(fd_pre);
-                        close(fd_post);
-                        return -1;
-                    }
-                }
-                else {
-                    // copy contents of pre_test into post_test
-                    ifstream infile(pre_test + path2, std::ios::binary);
-                    ofstream outfile(post_test + path2, std::ios::binary);
-                    outfile << infile.rdbuf();
-                    infile.close();
-                    outfile.close();
-                    fd_post = open((post_test + path2).c_str(), O_RDWR);
-                    if (fd_post < 0) {
-                        return -1;
-                    }
-                    ret = ftruncate(fd_post, mod.file_mod_len);
-                    if (ret < 0) {
-                        close(fd_pre);
-                        close(fd_post);
-                        return -1;
-                    }
-                }
-            }
-            else if (mod.mod_type == DiskMod::kMarkMod) {
-                mark_set = true;
-                close(fd_pre);
-            }
-        }
-    }
-    // close(fd_pre);
-    close(fd_post);
-    return 0;
 }
 
 int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_trace, bool reorder) {
@@ -472,7 +342,7 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
                     // copy the tail write's data into the first part
                     memcpy(temp_buffer, tail->data, tail->metadata->len);
                     // copy the new write's data into the rest
-                    ioctl_val = ioctl(fd, LOGGER_GET_DATA, temp_buffer+tail->metadata->len);
+                    ioctl_val = ioctl(fd, LOGGER_GET_DATA, (char*)temp_buffer+tail->metadata->len);
                     if (ioctl_val < 0) {
                         perror("LOGGER_GET_DATA");
                         free(temp_buffer);
@@ -586,20 +456,6 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
     if (tester_type == "syz" && 
             last_successful_syscall_mark != nullptr && 
             last_successful_syscall_end_mark != nullptr) {
-        // log << "INSERTING MARK AND CHECKPOINT" << endl;
-        // struct write_op* mark = (struct write_op*) malloc(sizeof(struct write_op));
-        // if (mark == NULL) {
-        //     perror("malloc");
-        //     free(new_op);
-        //     return -ENOMEM;
-        // }
-        // mark->metadata = (struct op_metadata*) malloc(sizeof(struct op_metadata));
-        // if (mark->metadata == NULL) {
-        //     perror("malloc");
-        //     free(new_op);
-        //     return -ENOMEM;
-        // }
-        // mark->metadata->type = MARK;
         struct write_op* checkpoint = (struct write_op*) malloc(sizeof(struct write_op));
         if (checkpoint == NULL) {
             perror("malloc");
@@ -613,16 +469,6 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
             return -ENOMEM;
         }
         checkpoint->metadata->type = CHECKPOINT;
-        // if (last_successful_syscall_mark->prev != nullptr) {
-        //     // have the syscall mark's previous node point to mark
-        //     // last_successful_syscall_mark->prev->next = mark;
-        //     mark->prev = last_successful_syscall_mark->prev;
-        // }
-    
-        // // mark->next = last_successful_syscall_mark;
-        // if (last_successful_syscall_mark == head) {
-        //     head = mark;
-        // }
     
         // last_successful_syscall_mark->prev = mark;
         if (last_successful_syscall_end_mark->next != nullptr) {
@@ -641,11 +487,9 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
 int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkpoint_count, 
     ofstream& log, string test_name, ofstream& trace_file, bool make_trace, bool reorder, ofstream& oracle_diff_file) {
     int ret;
-    unsigned int i, j;
     bool passed = true;
     struct write_op* new_op;
     string command;
-    milliseconds elapsed;
 
     // dequeue the head of the local write log and process it
     new_op = head;
@@ -675,9 +519,7 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                     log << i << " " << std::hex << write_queue[i]->metadata->dst << ", " << std::dec;
                 }
                 ret = flush_entries(fd_replay, new_op, trace_file, make_trace, log, write_queue, reorder);
-                log << "freeing write queue" << endl;
                 free_queue(write_queue);
-                log << "write queue after free: " << endl;
                 for (size_t i = 0; i < write_queue.size(); i++) {
                     log << std::hex << write_queue[i]->metadata->dst << ", " << std::dec;
                 }
@@ -709,41 +551,27 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
             unordered_write = true;
             break;
         case NT:
-            // if (fs_mounted)
-                log << "NT, " << std::hex << new_op->metadata->dst << ", " << std::dec << new_op->metadata->len << ", " << new_op->metadata->likely_data << ", " << new_op->metadata->pid << endl;
-                // cout << "NT" << endl;
+            log << "NT, " << std::hex << new_op->metadata->dst << ", " << std::dec << new_op->metadata->len << ", " << new_op->metadata->likely_data << ", " << new_op->metadata->pid << endl;
             unordered_write = true;
             write_queue.push_back(new_op);
             break;
         case CHECKPOINT:
-            // if (fs_mounted)
-                log << "CHECKPOINT" << ", " << new_op->metadata->pid << endl;
-                // cout << "CHECKPOINT" << endl;
+            log << "CHECKPOINT" << ", " << new_op->metadata->pid << endl;
             checkpoint_count++;
-            // TODO: have the number of checkpoints match the number of threads
-            // and let the user specify this (or something)
-            // if (checkpoint_count == num_threads) {
-                if (unordered_write) {
-                    ret = make_and_check_crash_states(fd_replay, fd, checkpoint, log, test_name, trace_file, make_trace, mod_index, reorder);
-                    if (ret < 0) {
-                        return ret;
-                    }
+            if (unordered_write) {
+                ret = make_and_check_crash_states(fd_replay, fd, checkpoint, log, test_name, trace_file, make_trace, mod_index, reorder);
+                if (ret < 0) {
+                    return ret;
                 }
-                
-                return 1;
-            // }
+            }
             return 1;
             break;
         case MARK:
             fs_mounted = true;
             log << "BEGINNING OF TESTED SYSTEM CALL" << ", " << new_op->metadata->pid << endl;
-            cout << "BEGINNING OF TESTED SYSTEM CALL" << endl;
-            // cout << "MARK" << endl;
             break;
         case MARK_SYS:
-            // if (fs_mounted)
             log << "MARK SYS " << std::dec << new_op->metadata->sys << ", " << new_op->metadata->pid << endl;
-                // cout << "MARK SYS" << endl;
             struct syscall_record sr;
             sr.syscall_num = new_op->metadata->sys;
             sr.pid = new_op->metadata->pid;
@@ -760,11 +588,7 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
             }
             syscalls.push_back(sr);
             ret = find_disk_mod(sr, log, oracle_diff_file);
-            // if (mod_index < 0) {
             if (ret < 0) {
-                // if (ret == -2) {
-                //     return ret;
-                // }
                 // TODO: is this enough to fail?
                 passed = false;
                 error_in_oracle = true;
@@ -775,9 +599,7 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
             }
             break;
         case MARK_SYS_END:
-            // if (fs_mounted)
-                log << "MARK SYS END" << ", " << new_op->metadata->pid << ", " << new_op->metadata->sys_ret << endl;
-                // cout << "MARK SYS END" << endl;
+            log << "MARK SYS END" << ", " << new_op->metadata->pid << ", " << new_op->metadata->sys_ret << endl;
             sync(); // make sure the crash state is synced before we test it
             // if (call_index == 7) {
             //     string command = "dd if=/dev/pmem1 of=/root/tmpdir/crash.img bs=100M";
@@ -815,8 +637,8 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
     // mods_[0]
     // TODO: to support the fuzzer, may need to add read; should add openat, ftruncate, lseek?
     // TODO: this could use refactoring
-    assert(mod_index+1 <= mods_[0].size());
-    for (int i = mod_index+1; i < mods_[0].size(); i++) {
+    // assert(mod_index+1 <= mods_[0].size());
+    for (unsigned int i = mod_index+1; i < mods_[0].size(); i++) {
         DiskMod mod = mods_[0][i];
         switch (sr.syscall_num) {
             case SYS_mknod:
@@ -863,7 +685,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                 }
                 break;
             // case SYS_fchmod:
-            //     cout << "FCHMOD DUDE" << endl;
             //     if (mod.mod_type != DiskMod::kMetadataMod 
             //                 || mod.mod_opts != DiskMod::kChmodOpt) {
             //         break;
@@ -1509,9 +1330,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         syscall_list += "fsync,";
 
                         ret = oracle_state.get_paths(mod.path, paths, log);
-                        // if (ret < 0) {
-                        //     goto out;
-                        // }
                         if (ret >= 0) {
                             fd = path_fd_map[paths.relative_path][mod.fd];
                             fsync(fd);
@@ -1526,7 +1344,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1540,9 +1357,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         syscall_list += "fdatasync,";
 
                         ret = oracle_state.get_paths(mod.path, paths, log);
-                        // if (ret < 0) {
-                        //     goto out;
-                        // }
                         if (ret >= 0) {
                             fd = path_fd_map[paths.relative_path][mod.fd];
                             fdatasync(fd);
@@ -1550,11 +1364,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         } else {
                             ret = 0;
                         }
-                        // if (ret < 0) {
-                        //     log << "Failed getting oracle state in fdatasync" << endl;
-                        //     // return ret;
-                        // }
-                        cout << "fdata sync done" << endl;
                     }
                     mod_index = i;
                     // return 0;
@@ -1571,7 +1380,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         oracle_state.sync();
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1639,7 +1447,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1648,7 +1455,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                     call_index++;
                     cout << "lseek at " << call_index << endl;
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1684,7 +1490,8 @@ out:
 }
 
 int Tester::make_and_check_crash_states(int fd_replay, int fd, int checkpoint, ofstream& log, string test_name, ofstream& trace_file, bool make_trace, int &mod_index, bool reorder) {
-    int i, j, ret;
+    unsigned int i, j;
+    int ret;
     // int passed = 0;
     milliseconds elapsed;
     // if there have been unordered writes AND the FS has been 
@@ -1701,7 +1508,7 @@ int Tester::make_and_check_crash_states(int fd_replay, int fd, int checkpoint, o
 
         for (i = 0; i < new_subsets.size(); i++) {
             time_point<steady_clock> run_test_start = steady_clock::now();
-            for (int j = 0; j < new_subsets[i].size(); j++) {
+            for (j = 0; j < new_subsets[i].size(); j++) {
                 log << std::hex << new_subsets[i][j]->metadata->dst << " " << std::dec << new_subsets[i][j]->metadata->len << endl;
             }
             log << endl;
@@ -1890,13 +1697,7 @@ vector<vector<struct write_op*> > Tester::handle_outstanding_writes(ofstream& lo
     new_subsets.clear();
     vector<struct write_op*> op_vec = write_queue;
 
-    // cout << "Outstanding writes: ";
-    // for (size_t i = 0; i < op_vec.size(); i++) {
-    //     cout << std::hex << op_vec[i]->metadata->dst << ", " << std::dec;
-    // }
-    // cout << endl;
-
-    for (int i = 0; i < op_vec.size(); i++) {
+    for (unsigned int i = 0; i < op_vec.size(); i++) {
         if (op_vec[i]->metadata->likely_data == 1) {
             has_data_write = true;
             break;
@@ -1910,27 +1711,16 @@ vector<vector<struct write_op*> > Tester::handle_outstanding_writes(ofstream& lo
     // unsigned int max_k = 2; 
     // unsigned int max_k = op_vec.size();
 
-    int subset_size;
+    unsigned int subset_size;
     if (max_k < 0 || op_vec.size() < max_k) {
         subset_size = op_vec.size();
     } else {
         subset_size = max_k;
     }
 
-    // if (op_vec.size() < max_k) {
-    //     max_k = op_vec.size();
-    // }
     for (unsigned int k = 1; k <= subset_size; k++) {
         choose(0, k, op_vec, current, new_subsets);
     }
-
-    // cout << "New subsets: " << endl;
-    // for (int i = 0; i < new_subsets.size(); i++) {
-    //     for (int j = 0; j < new_subsets[i].size(); j++) {
-    //         cout << std::hex << new_subsets[i][j]->metadata->dst << ", " << std::dec;
-    //     }
-    //     cout << endl;
-    // }
 
     // if the epoch has any data writes, go through and add some subsets where we modify the data writes according to some heuristics to try to expose more bugs
     if (has_data_write && check_data) {
@@ -1953,30 +1743,10 @@ void Tester::choose(int n, int k, vector<struct write_op*> op_vec, vector<struct
     }
 }
 
-// void getCrashes(map<string, bool> &crashMap) {
-//     std::ifstream infile("/root/tmpdir/crashHashes.txt");
-//     std::string line;
-//     while (std::getline(infile, line))
-//     {
-//         crashMap.insert(std::pair<string, bool>(line, true));
-//     }
-//     infile.close();
-// }
-
-// void writeCrash(std::string crash) {
-//     std::ofstream outfile("/root/tmpdir/crashHashes.txt", std::ios_base::app);
-//     outfile << crash << endl;
-//     outfile.close();
-// }
-
 int Tester::make_replay(string test_name, string replay_src_path, string replica_path, vector<struct write_op*> writes, ofstream& log) {
     int ret, offset;
-    // FILE* fptr;
     string command;
     int fd;
-    FILE *fp;
-    char hash[1035];
-    // map<string, bool> crashes;
 
     fd = open(replica_path.c_str(), O_RDWR);
     if (fd < 0) {
@@ -2023,30 +1793,6 @@ int Tester::make_replay(string test_name, string replay_src_path, string replica
     }
     fsync(fd);
     close(fd);
-
-    
-
-    // cout << ("md5sum " + replica_path).c_str() << endl;
-    // fp = popen(("md5sum " + replica_path).c_str(), "r");
-    // if (fp == NULL) {
-    //     printf("Failed to run md5sum\n" );
-    //     exit(1);
-    // }
-
-    // /* Read the output a line at a time - output it. */
-    // while (fgets(hash, sizeof(hash), fp) != NULL) {
-    // }
-    // std::string md5out = std::string(hash);
-    // std::string crashhash = md5out.substr(0, md5out.find(" "));
-
-    // cout << "crash hash: " << crashhash << endl;
-    // getCrashes(crashes);
-    // if (!crashes.count(crashhash)) {
-    //     writeCrash(crashhash);
-    // }
-
-    /* close */
-    // pclose(fp);
     
     return 0;
 }
@@ -2623,7 +2369,7 @@ bool Tester::make_files(string path, ofstream& diff_file) {
         }
 
         struct dirent* dir_entry;
-        while (dir_entry = readdir(directory)) {
+        while ((dir_entry = readdir(directory))) {
             if ((strcmp(dir_entry->d_name, ".") == 0) ||
                 (strcmp(dir_entry->d_name, "..") == 0)) {
                 continue;
@@ -2665,7 +2411,7 @@ bool Tester::delete_files(string path, ofstream& diff_file) {
         }
 
         struct dirent* dir_entry;
-        while (dir_entry = readdir(directory)) {
+        while ((dir_entry = readdir(directory))) {
             if ((strcmp(dir_entry->d_name, ".") == 0) ||
                 (strcmp(dir_entry->d_name, "..") == 0)) {
                 continue;
@@ -2697,253 +2443,6 @@ bool Tester::delete_files(string path, ofstream& diff_file) {
     }
 
     return true;
-}
-
-// our equivalent of CrashMonkey's check_disk_and_snapshot_contents in Tester.cpp
-bool Tester::check_fs_contents(int checkpoint, ofstream& diff_file, bool final) {
-    bool pre_check, post_check;
-    struct stat statbuf;
-    // bool mark_set = false;
-    int fd, ret;
-
-    DiskContents crash(replay_device_path, fs), oracle(device_path, fs);
-    crash.set_mount_point(replay_mount_point);
-    oracle.set_mount_point(device_mount_point);
-
-
-    // ret = oracle.mount_disk(mount_opts);
-    // if (ret < 0) {
-    //     perror("mount");
-    //     cout << "Failed mounting " << device_mount_point << endl;
-    //     diff_file << "Failed mounting " << device_mount_point << endl;
-    //     return false;
-    // }
-    // string opts;
-    // if (fs == "NOVA" && check_data) {
-    //     opts = "data_cow";
-    // }
-    // else {
-    //     opts = "";
-    // }
-
-    for (unsigned int i = 0; i < mods_.size(); i++) {
-        if (mods_[i].size() != 0) {
-            int check_sync_count = 0;
-            for (unsigned int j = 0; j < mods_[i].size(); j++) {
-                DiskMod mod = mods_[i][j];
-                string path(mod.path);
-                path.erase(0, device_mount_point.length());
-                string path2(path);
-                for (unsigned int k = 0; k < path2.size(); k++) {
-                    if (path2[k] == '/') {
-                        path2[k] = '-';
-                    }
-                }
-                string pre_oracle_path = pre_test + path2;
-                string post_oracle_path = post_test + path2; 
-
-                // string path(mod.path);
-                // path.erase(0, device_mount_point.length()); // remove leading part of the path so we can replace it
-                string base_path = replay_mount_point + path;
-                
-                ret = lstat(base_path.c_str(), &statbuf);
-                if (ret != 0) {
-                    if (errno != ENOENT) {
-                        diff_file << "Got error " << errno << " on file " << base_path << endl;
-                        // oracle.unmount_disk();
-                        return false;
-                    }
-                }
-                else {
-                    // TODO: what happens if a file has been deleted or renamed/moved? shouldnt be an issue with ACE tests,
-                    // but could be a problem for fuzzer-generated tests.
-                    if ((mod.mod_type == DiskMod::kDataMod || mod.mod_type == DiskMod::kDataMetadataMod) && check_data && fs != "ext4") {
-                        pre_check = crash.compare_file_contents(pre_oracle_path, path, mod.file_mod_location, mod.file_mod_len, diff_file);
-                        // not every file has a post oracle. if a file doesn't have 
-                        // a post oracle, we only need to compare against the 
-                        // pre oracle
-                        if (access(post_oracle_path.c_str(), F_OK) != -1) {
-                            post_check = crash.compare_file_contents(post_oracle_path, path, mod.file_mod_location, mod.file_mod_len, diff_file);
-                        }
-                        else {
-                            post_check = pre_check;
-                        }
-                        if (!pre_check && !post_check) {
-                            cout << "Crash state did not match either oracle" << endl;
-                            // oracle.unmount_disk();
-                            return false;
-                        }
-                    }
-                    if ((mod.mod_type == DiskMod::kDataMod || mod.mod_type == DiskMod::kSyncFileRangeMod) && fs == "ext4") {
-                        ret = crash.compare_file_contents2(oracle, path, mod.file_mod_location, mod.file_mod_len, diff_file, mount_opts);
-                        if (!ret) {
-                            // oracle.unmount_disk();
-                            return ret;
-                        }
-                    }
-                    else if (mod.mod_type == DiskMod::kFsyncMod) {
-                        check_sync_count++;
-                        if ((check_sync_count <= sync_index && j == mods_[i].size()-1)|| fs == "ext4") {
-                            // string path(mod.path);
-                            path.erase(0, device_mount_point.length());
-                            ret = crash.compare_entries_at_path(oracle, path, diff_file, true);
-                            if (!ret) {
-                                // oracle.unmount_disk();
-                                return ret;
-                            }
-                        }
-                    }
-                    else if (mod.mod_type == DiskMod::kSyncMod) {
-                        check_sync_count++;
-                        if ((check_sync_count <= sync_index && j == mods_[i].size()-1)|| fs == "ext4") {
-                            ret = crash.compare_disk_contents(oracle, diff_file, mount_opts);
-                            if (!ret) {
-                                // oracle.unmount_disk();
-                                return ret;
-                            }
-                        }
-                    }
-                    // for non-sync or data modifications, just try to see if the operation was atomic 
-                    // and make sure things are readable and writable
-                    else {
-                        string path(mod.path);
-                        path.erase(0, device_mount_point.length()); // remove leading part of the path so we can replace it
-                        string base_path = replay_mount_point + path;
-                        
-                        ret = lstat(base_path.c_str(), &statbuf);
-                        if (ret != 0) {
-                            if (errno != ENOENT) {
-                                perror("stat 2");
-                                diff_file << "Got error " << errno << " on file " << base_path << endl;
-                                // oracle.unmount_disk();
-                                return false;
-                            }
-                        }
-                        // if the stat succeeds, try opening and reading the file 
-                        // if it's a regular file, try writing some data to it
-                        else {
-                            if (S_ISDIR(statbuf.st_mode)) {
-                                struct dirent* dent;
-                                DIR* d = opendir(base_path.c_str());
-                                if (d == NULL) {
-                                    cout << "Unable to open " << base_path << " even though it should exist - error: " << strerror(errno) << endl;
-                                    diff_file << "Unable to open " << base_path << " even though it should exist - error: " << strerror(errno) << endl;
-                                    // closedir(d);
-                                    // oracle.unmount_disk();
-                                    return false;
-                                }
-                                int old_errno = errno;
-                                dent = readdir(d);
-                                if (dent == NULL && old_errno != errno) {
-                                    cout << "Unable to read directory " << base_path << ", error: " << strerror(errno) << endl;
-                                    diff_file << "Unable to read directory " << base_path << ", error: " << strerror(errno) << endl;
-                                    closedir(d);
-                                    // oracle.unmount_disk();
-                                    return false;
-                                }
-                                while (dent != NULL) {
-                                    dent = readdir(d);
-                                    if (dent == NULL && old_errno != errno) {
-                                        cout << "Unable to read directory " << base_path << ", error: " << strerror(errno) << endl;
-                                        diff_file << "Unable to read directory " << base_path << ", error: " << strerror(errno) << endl;
-                                        closedir(d);
-                                        // oracle.unmount_disk();
-                                        return false;
-                                    }
-                                }
-                                closedir(d);
-                            }
-                            else {
-                                int file_size;
-                                int bufsize = 1024;
-                                fd = open(base_path.c_str(), O_RDWR);
-                                if (fd < 0) {
-                                    cout << "Unable to open " << base_path << " even though it should exist, error: " << strerror(errno) << endl;
-                                    diff_file << "Unable to open " << base_path << " even though it should exist, error: " << strerror(errno) << endl;
-                                    // oracle.unmount_disk();
-                                    return false;
-                                }
-
-                                // check if file is empty
-                                off_t fsize = lseek(fd, 0, SEEK_END);
-                                if (fsize < 0) {
-                                    close(fd);
-                                    cout << "Unable to seek in file " << base_path << ", error: " << strerror(errno) << endl;
-                                    diff_file << "Unable to seek in file " << base_path << ", error: " << strerror(errno) << endl;
-                                    // oracle.unmount_disk();
-                                    return false;
-                                }
-                                file_size = fsize;
-                                // seek back to the beginning
-                                fsize = lseek(fd, 0, SEEK_SET);
-                                if (fsize < 0) {
-                                    close(fd);
-                                    cout << "Unable to seek in file " << base_path << ", error: " << strerror(errno) << endl;
-                                    diff_file << "Unable to seek in file " << base_path << ", error: " << strerror(errno) << endl;
-                                    // oracle.unmount_disk();
-                                    return false;
-                                }
-
-                                // if the file isn't empty, try to read from it
-                                if (file_size > 0) {
-                                    // TODO: how much should we read? should we try to read from each page? For now,
-                                    // just read from the beginning
-                                    if (file_size < bufsize) {
-                                        bufsize = file_size;
-                                    }
-                                    char* read_buf = (char*)malloc(bufsize);
-
-                                    // attempt to read
-                                    ret = read(fd, read_buf, bufsize);
-                                    if (ret < 0) {
-                                        free(read_buf);
-                                        close(fd);
-                                        cout << "Unable to read non-empty file " << base_path << ", error: " << strerror(errno) << endl;
-                                        diff_file << "Unable to read non-empty file " << base_path << ", error: " << strerror(errno) << endl;
-                                        // oracle.unmount_disk();
-                                        return false;
-                                    }
-                                    free(read_buf);
-                                }
-
-                                // TODO: since we're checking file data, we'll have to save actual file modifications until the end
-                                // // regardless of size, we can also try to write to the file 
-                                // // TODO: where and how much should we write? does it matter?
-                                // // create a small buffer of data to write
-                                // char write_buf[16];
-                                // for (int i = 0; i < 16; i++) {
-                                //     write_buf[i] = 'a';
-                                // }
-
-                                // ret = write(fd, write_buf, 16);
-                                // if (ret < 0) {
-                                //     close(fd);
-                                //     cout << "Unable to write to file " << base_path << ", error: " << strerror(errno) << endl;
-                                //     diff_file << "Unable to write to file " << base_path << ", error: " << strerror(errno) << endl;
-                                //     return false;
-                                // }
-                                // fsync(fd);
-                                // // cout << "fsyncing" << endl;
-                                // // cout << "done writing" << endl;
-                            
-                                close(fd);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // oracle.unmount_disk();
-
-    // then check if we can make and delete files everywhere. We can just use CrashMonkey's sanity_checks function
-    if (crash.sanity_checks(diff_file) == false) {
-        cout << "Failed sanity checks on " << replay_device_path << endl;
-        return false;
-    }
-
-    return true; 
 }
 
 int Tester::GetChangeData(const int fd) {
@@ -3013,7 +2512,7 @@ int Tester::update_children(struct paths paths, bool creat, bool del, ofstream& 
             return ret;
         }
         struct dirent *dentry;
-        while (dentry = readdir(directory)) {
+        while ((dentry = readdir(directory))) {
             if ((strcmp(dentry->d_name, ".") == 0) ||
                 (strcmp(dentry->d_name, "..") == 0)) {
                 continue;
