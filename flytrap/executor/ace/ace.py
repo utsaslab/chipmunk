@@ -15,8 +15,6 @@ import threading
 from shutil import copyfile
 from multiprocessing import Pool
 from progress.bar import FillingCirclesBar
-import requests
-import json
 
 # Import list of all function options
 from common import (FallocOptions, FsyncOptions, FileOptions, SecondFileOptions, DirOptions, 
@@ -199,7 +197,7 @@ def file_range(file_list):
 # write,(foo, 0-256K), mmapwrite(0-4K), mmapwrite(252-256K), msync(0-64K), msync(192-256K)
 
 
-VALID_TEST_TYPES = ['crashmonkey', 'xfstest', 'xfstest-concise', 'nova', 'multithread']
+VALID_TEST_TYPES = ['crashmonkey', 'xfstest', 'xfstest-concise', 'pm', 'multithread']
 
 def build_parser():
     parser = argparse.ArgumentParser(description='Automatic Crash Explorer v0.1')
@@ -341,7 +339,7 @@ def buildCustomTuple(file_list, test_type):
     SyncSetNoneCustom = tuple(SyncSetNoneCustom)
     syncPermutationsCustom = list()
 
-    if test_type == "nova":
+    if test_type == "pm":
         temp = ['none']
         temp = tuple(temp)
         syncPermutationsCustom.append(temp)
@@ -688,7 +686,7 @@ def checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open
 
 
 # Handles satisfying dependencies, for a given core FS op
-def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
+def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map, test_type):
     global corefs
     
     if isinstance(current_sequence[pos], str):
@@ -715,7 +713,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
         
         modified_pos = checkCreatDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
         file = current_sequence[pos][1]
@@ -725,7 +723,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
         modified_pos = checkDirDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
         dir = current_sequence[pos][1]
@@ -742,7 +740,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
         modified_pos = checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
 
@@ -772,7 +770,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
 
         # TODO: might want to move this?
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
 
@@ -796,7 +794,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
         
         # TODO: might want to move?
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
         
         # We have created a new file, but it isn't open yet
@@ -829,7 +827,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
 
         # TODO: might want to move?
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
         
 
@@ -852,7 +850,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
         modified_pos = checkClosed(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
         
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
         # Remove file from map
@@ -867,7 +865,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
             modified_pos += 1
         
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
         # Remove file from map
@@ -903,7 +901,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
         modified_pos = checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
         corefs += 1
-        if (corefs == int(num_ops)):
+        if (corefs == int(num_ops) and test_type == "pm"):
             modified_pos = addMark(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
     
     else:
@@ -989,8 +987,8 @@ def buildJ2lang(sequence):
         elif op == "truncate":
             def map_truncate_option(opt):
                 if opt == "aligned": return "0"
-                else: return "256"
-                # else: return "2500"
+                elif test_type == "pm": return "256"
+                else: return "2500"
 
             f1 = new_file(parameters[0])
             opt = new_option(list(map(map_truncate_option, parameters[1])))
@@ -1046,7 +1044,7 @@ def buildJlang(op_list, length_map, test_type):
         command_str = command_str + 'falloc ' + file.replace('/','') + ' ' + str(option) + ' '
         if write_op == 'append':
             off = str(length_map[file])
-            if test_type == "nova":
+            if test_type == "pm":
                 lenn = '4096'
                 length_map[file] += 4096
             else:
@@ -1055,13 +1053,13 @@ def buildJlang(op_list, length_map, test_type):
             
         elif write_op == 'overlap_unaligned_start':
             off = '0'
-            if test_type == "nova":
+            if test_type == "pm":
                 lenn = '1024'
             else:
                 lenn = '5000'
         elif write_op == 'overlap_unaligned_end':
             size = length_map[file]
-            if test_type == "nova":
+            if test_type == "pm":
                 off = str(size-1024)
                 lenn = '1024'
             else:
@@ -1070,7 +1068,7 @@ def buildJlang(op_list, length_map, test_type):
             
         elif write_op == 'overlap_extend':
             size = length_map[file]
-            if test_type == "nova":
+            if test_type == "pm":
                 off = str(size-1024)
                 lenn = '2048'
                 length_map[file] += 1024
@@ -1086,7 +1084,7 @@ def buildJlang(op_list, length_map, test_type):
         write_op = flat_list[2]
         command_str = command_str + 'write ' + file.replace('/','') + ' '
         if write_op == 'append':
-            if test_type == "nova":
+            if test_type == "pm":
                 lenn = '4096'
             else:
                 lenn = '32768'
@@ -1096,19 +1094,19 @@ def buildJlang(op_list, length_map, test_type):
             else:
                 off = str(length_map[file])
             
-            if test_type == "nova":
+            if test_type == "pm":
                 length_map[file] += 4096
             else:
                 length_map[file] += 32768
         elif write_op == 'overlap_unaligned_start':
             off = '0'
-            if test_type == "nova":
+            if test_type == "pm":
                 lenn = '1024'
             else:
                 lenn = '5000'
         elif write_op == 'overlap_unaligned_end':
             size = length_map[file]
-            if test_type == "nova":
+            if test_type == "pm":
                 off = str(size-1024)
                 lenn = '1024'
             else:
@@ -1116,7 +1114,7 @@ def buildJlang(op_list, length_map, test_type):
                 lenn = '5000'
         elif write_op == 'overlap_extend':
             size = length_map[file]
-            if test_type == "nova":
+            if test_type == "pm":
                 off = str(size-1024)
                 lenn = '1024'
             else:
@@ -1131,7 +1129,7 @@ def buildJlang(op_list, length_map, test_type):
         command_str = command_str + 'dwrite ' + file.replace('/','') + ' '
         
         if write_op == 'append':
-            if test_type == "nova":
+            if test_type == "pm":
                 lenn = '4096'
             else:
                 lenn = '32768'
@@ -1140,7 +1138,7 @@ def buildJlang(op_list, length_map, test_type):
                 off = '0'
             else:
                 off = str(length_map[file])
-            if test_type == "nova":
+            if test_type == "pm":
                 length_map[file] += 4096
             else:
                 length_map[file] += 32768
@@ -1148,13 +1146,13 @@ def buildJlang(op_list, length_map, test_type):
 
         elif write_op == 'overlap_start':
             off = '0'
-            if test_type == "nova":
+            if test_type == "pm":
                 lenn = '1024'
             else:
                 lenn = '8192'
         elif write_op == 'overlap_end':
             size = length_map[file]
-            if test_type == "nova":
+            if test_type == "pm":
                 off = str(size-1024)
                 lenn = '1024'
             else:
@@ -1202,36 +1200,44 @@ def buildJlang(op_list, length_map, test_type):
 
     if command == 'fsync':
         file = flat_list[1]
-        # if (file.replace('/','') == "ACfoo"):
-        #     print("file is ACfoo")
-        #     print(flat_list)
         ret = flat_list[2]
-        # command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
-        command_str = command_str + command + ' ' + file.replace('/','')
-        log_file_handle.write("command string: " + command_str + "\n")
+        if test_type == "pm":
+            command_str = command_str + command + ' ' + file.replace('/','')
+            log_file_handle.write("command string: " + command_str + "\n")
+        else:
+            command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
+        
 
     if command =='fdatasync':
         file = flat_list[1]
         ret = flat_list[2]
-        # command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
-        command_str = command_str + command + ' ' + file.replace('/','')
-        log_file_handle.write("command string: " + command_str + "\n")
+        if test_type == "pm":
+            command_str = command_str + command + ' ' + file.replace('/','')
+            log_file_handle.write("command string: " + command_str + "\n")
+        else:
+            command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
+        
 
 
     if command == 'sync':
         ret = flat_list[1]
-        # command_str = command_str + command + '\ncheckpoint ' + ret
-        log_file_handle.write("command string: " + command_str + "\n")
+        if test_type == "pm":
+            log_file_handle.write("command string: " + command_str + "\n")
+        else:
+            command_str = command_str + command + '\ncheckpoint ' + ret
+        
 
     if command == 'none':
         # print("flat list 1 " + flat_list[1])
         # print("flat list 2 " + flat_list[2])
-        ret = flat_list[1]
-        if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
-            command_str = command_str + command + '\ncheckpoint 0'
-            # command_str = command_str + command + '\ncheckpoint ' + ret
+        if test_type == "pm":
+            ret = flat_list[1]
+            if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+                command_str = command_str + command + '\ncheckpoint 0'
+        else:
+            command_str = command_str + command
 
-    if command == 'mark' and (test_type == "nova" or test_type == "multithread"):
+    if command == 'mark' and (test_type == "pm" or test_type == "multithread"):
         command_str = command_str + command 
 
     if command == 'truncate':
@@ -1242,8 +1248,10 @@ def buildJlang(op_list, length_map, test_type):
             len = '0'
             length_map[file] = 0
         elif trunc_op == 'unaligned':
-            # len = '2500'
-            len = "256"
+            if test_type == "pm":
+                len = '256'
+            else:
+                len = '2500'
         command_str = command_str + len
 
     log_file_handle.write("command string: " + command_str + "\n")
@@ -1266,12 +1274,12 @@ def doPermutation(perm, test_type):
     global corefs
     
     # dest_dir = 'seq'+num_ops
-    if test_type == "nova":
+    if test_type == "pm":
         dest_dir = 'seq'+num_ops
     elif num_ops == "1":
-        dest_dir = "ext4_seq1"
+        dest_dir = "dax_seq1"
     elif num_ops == "2":
-        dest_dir = "ext4_seq2"
+        dest_dir = "dax_seq2"
     
     if nested:
         dest_dir += '_nested'
@@ -1308,17 +1316,18 @@ def doPermutation(perm, test_type):
         # Hacks to reduce the workload set (#2):
         # Allow this combination of parameters only if we reuse files across the chosen operations.
         toSkip = False
-        # for paramLength in range(0, int(num_ops)):
-        #     intersect = list(set(currentParameterOption[paramLength]) & set(usedSofar))
-        #     if currentParameterOption[paramLength][0] == 'A' or currentParameterOption[paramLength][0] == 'B' or currentParameterOption[paramLength][0] == 'AC':
-        #         intersect.append('A')
-        #     elif len(usedSofar) == 2 and (usedSofar[0] == 'A' or  usedSofar[0] == 'B' or usedSofar[0] == 'AC'):
-        #         intersect.append('A')
-        #     usedSofar = list(set(currentParameterOption[paramLength]) | set(usedSofar))
-        #     if len(intersect) == 0 and paramLength > 0 and int(num_ops) == 3:
-        #         # print 'Skip this option'
-        #         toSkip = True
-        #         continue
+        if test_type != "pm":
+            for paramLength in range(0, int(num_ops)):
+                intersect = list(set(currentParameterOption[paramLength]) & set(usedSofar))
+                if currentParameterOption[paramLength][0] == 'A' or currentParameterOption[paramLength][0] == 'B' or currentParameterOption[paramLength][0] == 'AC':
+                    intersect.append('A')
+                elif len(usedSofar) == 2 and (usedSofar[0] == 'A' or  usedSofar[0] == 'B' or usedSofar[0] == 'AC'):
+                    intersect.append('A')
+                usedSofar = list(set(currentParameterOption[paramLength]) | set(usedSofar))
+                if len(intersect) == 0 and paramLength > 0 and int(num_ops) == 3:
+                    # print 'Skip this option'
+                    toSkip = True
+                    continue
 
         if toSkip:
             continue
@@ -1401,7 +1410,7 @@ def doPermutation(perm, test_type):
 
                 if not skip_sync:
                     sync_op = list()
-                    if (test_type == "nova"):
+                    if (test_type == "pm"):
                         sync_op.append('none')
                     else:
                         sync_op.append(syncPermutationsCustom[insSync][length])
@@ -1430,7 +1439,7 @@ def doPermutation(perm, test_type):
             # Go over the current sequence of operations and satisfy dependencies for each file-system op
             corefs = 0 
             for i in range(0, len(seq)):
-                modified_pos = satisfyDep(seq, i, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
+                modified_pos = satisfyDep(seq, i, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map, test_type)
                 modified_pos += 1
         
             # now close all open files
@@ -1455,15 +1464,6 @@ def doPermutation(perm, test_type):
                 run_line = '\n\n# run\n'
                 f.write(run_line)
 
-                # for insert in range(0, len(modified_sequence)):
-                #     log = str(modified_sequence[insert]) + "\n"
-                #     log_file_handle.write(log)
-                    # slightly janky but fixes issue where generated workloads attempt to fsync AC/foo when 
-                    # it hasn't been opened. This might have to be changed if/when you do seq2 and seq3
-                    # if ("AC/foo" not in modified_sequence[insert] and nested == False):
-                    #     cur_line = buildJlang(modified_sequence[insert], length_map, test_type)
-                    #     cur_line_log = '{0}'.format(cur_line) + '\n'
-                    #     f.write(cur_line_log)
                 for insert in range(0, len(modified_sequence)):
                     cur_line = buildJlang(modified_sequence[insert], length_map, test_type)
                     log_file_handle.write(cur_line + "\n")
@@ -1475,12 +1475,12 @@ def doPermutation(perm, test_type):
                 log_file_handle.write(str(f.readlines()))
 
             if test_type == 'crashmonkey':
-                dest_dir = "ext4_seq" + num_ops
-                exec_command = 'python3 cmAdapter.py -b ../code/tests/' + dest_dir + '/base.cpp -t ' + j_lang_file + ' -p ../code/tests/' + dest_dir + '/ -o ' + str(global_count)
-            if test_type == "nova":
+                dest_dir = "dax_seq" + num_ops
                 exec_command = 'python3 cmAdapter.py -b ../tests/' + dest_dir + '/base.cpp -t ' + j_lang_file + ' -p ../tests/' + dest_dir + '/ -o ' + str(global_count)
-            if test_type == "multithread":
-                exec_command = "python3 concurrentAdapter.py -b ../code/tests/" + dest_dir + "/base.cpp -t " + j_lang_file + " -p ../code/tests/multithread/ -o " + str(global_count) 
+            if test_type == "pm":
+                exec_command = 'python3 cmAdapter.py -b ../tests/' + dest_dir + '/base.cpp -t ' + j_lang_file + ' -p ../tests/' + dest_dir + '/ -o ' + str(global_count)
+            # if test_type == "multithread":
+            #     exec_command = "python3 concurrentAdapter.py -b ../code/tests/" + dest_dir + "/base.cpp -t " + j_lang_file + " -p ../code/tests/multithread/ -o " + str(global_count) 
             elif test_type == 'xfstest':
                 exec_command = 'python3 xfstestAdapter.py -t ' + j_lang_file + ' -p ../code/tests/' + dest_dir + '/ -n ' + str(global_count) + " -f generic"
             subprocess.call(exec_command, shell=True)
@@ -1634,10 +1634,10 @@ def main():
     #   print expected_sync_sequence[i]
     #   print '\n'
 
-    # NOVA only supports FALLOC_FL_KEEP_SIZE and does not support extended attributes 
+    # pm only supports FALLOC_FL_KEEP_SIZE and does not support extended attributes 
     # the tests ACE generates for mmapwrite and write use more than one system call, so 
     # we don't want to use them
-    if test_type == 'nova' or test_type == "multithread":
+    if test_type == 'pm' or test_type == "multithread":
         FallocOptions = ['FALLOC_FL_KEEP_SIZE']
         # OperationSet = ['creat', 'mkdir', 'falloc', 'write', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'mmapwrite', 'symlink', 'rmdir']
         # OperationSet = ['creat', 'mkdir', 'falloc', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'symlink', 'rmdir']
@@ -1668,18 +1668,19 @@ def main():
         SyncSet.append(tup)
 
     SyncSet.append(sync)
-    if test_type == "nova":
-        SyncSet.append(none)
+    SyncSet.append(none)
+    # if test_type == "pm":
+    #     SyncSet.append(none)
     SyncSet = tuple(SyncSet)
 
     dest_dir = ""
 
-    if test_type == "nova":
+    if test_type == "pm":
         dest_dir = 'seq'+num_ops
     elif num_ops == "1":
-        dest_dir = "ext4_seq1"
+        dest_dir = "dax_seq1"
     elif num_ops == "2":
-        dest_dir = "ext4_seq2"
+        dest_dir = "dax_seq2"
     
     if nested:
         dest_dir += '_nested'
@@ -1696,13 +1697,13 @@ def main():
     # copy base files into this directory
     # We assume that a directory ace-base exists with skeleton for the base j-lang and .cpp files. This has to be something pre-written according to the format required by your record-and-replay tool.
     if test_type == "crashmonkey" or test_type == "xfstest":
-        dest_j_lang_file = '../code/tests/' + dest_dir + '/base-j-lang'
-        source_j_lang_file = '../code/tests/ace-base/base-j-lang'
+        dest_j_lang_file = '../tests/' + dest_dir + '/base-j-lang'
+        source_j_lang_file = '../tests/ace-base/base-j-lang'
         copyfile(source_j_lang_file, dest_j_lang_file)
 
     if test_type == "crashmonkey":
-        dest_j_lang_cpp = '../code/tests/' + dest_dir + '/base.cpp'
-        source_j_lang_cpp = '../code/tests/ace-base/base.cpp'
+        dest_j_lang_cpp = '../tests/' + dest_dir + '/base.cpp'
+        source_j_lang_cpp = '../tests/ace-base/base.cpp'
         copyfile(source_j_lang_cpp, dest_j_lang_cpp)
 
     # Create all permutations of persistence ops  of given sequence length. This will be merged to the phase-2 workload.
@@ -1806,8 +1807,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # payload = {"text": "Starting seq2 workload generation"}
-    # r = requests.post(webhook.url, data=json.dumps(payload))
     main()
-    # payload = {"text": "Finished generating seq2 workloads"}
-    # r = requests.post(webhook.url, data=json.dumps(payload))

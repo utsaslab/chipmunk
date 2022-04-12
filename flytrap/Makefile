@@ -79,6 +79,15 @@ CM_SEQ3_OUT = \
 		$(foreach TEST, $(CM_SEQ3), \
 			$(BUILD_DIR)/tests/seq3/$(TEST))
 
+CM_DAX_SEQ1_EXCLUDE = base.cpp
+CM_DAX_SEQ1 = \
+		$(patsubst %.cpp, %.so, \
+			$(filter-out $(CM_DAX_SEQ1_EXCLUDE), \
+					$(notdir $(wildcard $(CURDIR)/executor/tests/dax_seq1/*.cpp))))
+CM_DAX_SEQ1_OUT = \
+		$(foreach TEST, $(CM_DAX_SEQ1), \
+			$(BUILD_DIR)/tests/dax_seq1/$(TEST))
+
 GO := go
 HOSTGO := go
 # By default, build all Go binaries as static. We don't need cgo and it is
@@ -211,6 +220,9 @@ seq2_tests: \
 
 seq3_tests: \
 	$(CM_SEQ3_OUT) 
+
+dax_seq1_tests: \
+	$(CM_DAX_SEQ1_OUT)
 
 loggers:
 ifneq ("$(BUILDOS)", "$(NATIVEBUILDOS)")
@@ -564,6 +576,18 @@ $(CM_SEQ2_OUT): $(BUILD_DIR)/tests/seq2/%.so : \
 
 $(CM_SEQ3_OUT): $(BUILD_DIR)/tests/seq3/%.so : \
 		executor/tests/seq3/%.cpp \
+		$(BUILD_DIR)/tests/BaseTestCase.o \
+		$(BUILD_DIR)/user_tools/src/actions.o \
+		$(BUILD_DIR)/user_tools/src/wrapper.o \
+		$(BUILD_DIR)/user_tools/src/workload.o \
+		$(BUILD_DIR)/utils/DiskMod.o \
+		$(BUILD_DIR)/results/DataTestResult.o
+	mkdir -p $(@D)
+	$(GPP) $(GOPTS) $(CFLAGS) $(GOTPSSO) $(XATTR_DEF_FLAG) -Wl,-soname,$(notdir $@) \
+		-o $@ $^
+
+$(CM_DAX_SEQ1_OUT): $(BUILD_DIR)/tests/dax_seq1/%.so : \
+		executor/tests/dax_seq1/%.cpp \
 		$(BUILD_DIR)/tests/BaseTestCase.o \
 		$(BUILD_DIR)/user_tools/src/actions.o \
 		$(BUILD_DIR)/user_tools/src/wrapper.o \

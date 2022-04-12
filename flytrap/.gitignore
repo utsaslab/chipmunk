@@ -3,7 +3,7 @@
 *.swp
 *.cfg
 *.tmp
-workdir*
+workdir/*
 
 bin/
 dashboard/app/config_prod.go

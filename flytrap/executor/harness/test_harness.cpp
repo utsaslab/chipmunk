@@ -47,9 +47,6 @@ using fs_testing::AceTester;
 #define BASE1 "dd if="
 #define BASE2 " of="
 #define BASE3 " bs=64M status=noxfer > /dev/null 2>&1"
-#define REPLAY1 "dd if="
-#define REPLAY2 " of="
-#define REPLAY3 "/code/replay/nova_replay.img bs=64M status=noxfer > /dev/null 2>&1"
 
 #define IMG1 "sudo dd if=/dev/zero of="
 #define IMG2 "/code/replay/nova_replay.img bs=128M count=1 status=noxfer > /dev/null 2>&1"
@@ -198,11 +195,6 @@ int main(int argc, char* argv[]) {
         }
         opterr = 0;
     }
-
-    // // TODO: make this not case sensitive
-    // if (fs != "NOVA" && fs != "pmfs") {
-    //     cerr << "Unrecognized file system. Please specify NOVA or pmfs (case sensitive)" << endl;
-    // }
 
     // TODO: check that pm_device and replay_device_path are actually DAX devices that NOVA can be mounted on
 
