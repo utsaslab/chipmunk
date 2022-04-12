@@ -1185,7 +1185,9 @@ def buildJlang(op_list, length_map, test_type):
             off = str(size-8192)
             lenn = '8192'
         
-        command_str = command_str + off + ' ' + lenn + '\ncheckpoint ' + ret
+        # command_str = command_str + off + ' ' + lenn + '\ncheckpoint ' + ret
+        if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+            command_str = command_str + off + ' ' + lenn + '\ncheckpoint 0'
 
     
 
@@ -1205,7 +1207,9 @@ def buildJlang(op_list, length_map, test_type):
             command_str = command_str + command + ' ' + file.replace('/','')
             log_file_handle.write("command string: " + command_str + "\n")
         else:
-            command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
+            if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+                command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint 0'
+            # command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
         
 
     if command =='fdatasync':
@@ -1215,7 +1219,9 @@ def buildJlang(op_list, length_map, test_type):
             command_str = command_str + command + ' ' + file.replace('/','')
             log_file_handle.write("command string: " + command_str + "\n")
         else:
-            command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
+            if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+                command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint 0'
+            # command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
         
 
 
@@ -1224,7 +1230,9 @@ def buildJlang(op_list, length_map, test_type):
         if test_type == "pm":
             log_file_handle.write("command string: " + command_str + "\n")
         else:
-            command_str = command_str + command + '\ncheckpoint ' + ret
+            if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+                command_str = command_str + command + '\ncheckpoint 0'
+            # command_str = command_str + command + '\ncheckpoint ' + ret
         
 
     if command == 'none':
