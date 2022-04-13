@@ -25,6 +25,6 @@ link Abar bar
 open bar O_RDWR|O_CREAT 0777
 unlink bar
 fsync bar
-checkpoint 1
+checkpoint 0
 close Abar
 close bar

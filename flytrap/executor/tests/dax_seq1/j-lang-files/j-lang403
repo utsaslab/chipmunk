@@ -25,4 +25,4 @@ opendir AC 0777
 close AC
 rename AC B
 sync
-checkpoint 1
+checkpoint 0

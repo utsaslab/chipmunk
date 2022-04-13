@@ -24,5 +24,5 @@ open Afoo O_RDWR|O_CREAT 0777
 write Afoo 0 32768
 falloc Afoo FALLOC_FL_ZERO_RANGE|FALLOC_FL_KEEP_SIZE 32768 32768
 sync
-checkpoint 1
+checkpoint 0
 close Afoo

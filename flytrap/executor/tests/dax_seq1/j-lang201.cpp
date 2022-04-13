@@ -86,14 +86,14 @@ namespace fs_testing {
 				}
 
 
-				int fd_ACfoo = cm_->CmOpen(ACfoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_ACfoo < 0 ) { 
-					cm_->CmClose( fd_ACfoo); 
+				int fd_AC = cm_->CmOpen(AC_path.c_str() , O_DIRECTORY , 0777); 
+				if ( fd_AC < 0 ) { 
+					cm_->CmClose( fd_AC); 
 					return errno;
 				}
 
 
-				if ( cm_->CmFsync( fd_ACfoo) < 0){ 
+				if ( cm_->CmFsync( fd_AC) < 0){ 
 					return errno;
 				}
 
@@ -103,7 +103,7 @@ namespace fs_testing {
 				}
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
-					return 1;
+					return 0;
 				}
 
 
@@ -112,7 +112,7 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_ACfoo) < 0){ 
+				if ( cm_->CmClose ( fd_AC) < 0){ 
 					return errno;
 				}
 

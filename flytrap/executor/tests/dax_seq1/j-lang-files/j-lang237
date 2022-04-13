@@ -23,9 +23,8 @@ mkdir A 0777
 mkdir AC 0777
 open bar O_RDWR|O_CREAT 0777
 link bar ACbar
-open ACbar O_RDWR|O_CREAT 0777
-unlink ACbar
-fsync ACbar
-checkpoint 1
+opendir test 0777
+fsync test
+checkpoint 0
 close bar
-close ACbar
+close test

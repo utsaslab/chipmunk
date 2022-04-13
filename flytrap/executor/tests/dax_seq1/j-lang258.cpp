@@ -86,12 +86,14 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmUnlink(ACbar_path.c_str() ) < 0){ 
+				int fd_test = cm_->CmOpen(test_path.c_str() , O_DIRECTORY , 0777); 
+				if ( fd_test < 0 ) { 
+					cm_->CmClose( fd_test); 
 					return errno;
 				}
 
 
-				if ( cm_->CmFsync( fd_ACbar) < 0){ 
+				if ( cm_->CmFsync( fd_test) < 0){ 
 					return errno;
 				}
 
@@ -101,11 +103,16 @@ namespace fs_testing {
 				}
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
-					return 1;
+					return 0;
 				}
 
 
 				if ( cm_->CmClose ( fd_ACbar) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmClose ( fd_test) < 0){ 
 					return errno;
 				}
 

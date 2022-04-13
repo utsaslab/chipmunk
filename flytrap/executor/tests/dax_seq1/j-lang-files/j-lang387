@@ -25,5 +25,5 @@ close A
 rename A B
 opendir test 0777
 fsync test
-checkpoint 1
+checkpoint 0
 close test

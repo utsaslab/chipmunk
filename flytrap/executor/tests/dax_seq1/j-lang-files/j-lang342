@@ -25,4 +25,4 @@ open Afoo O_RDWR|O_CREAT 0777
 close Afoo
 rename Afoo ACbar
 sync
-checkpoint 1
+checkpoint 0

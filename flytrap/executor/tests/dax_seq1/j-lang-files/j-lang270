@@ -23,4 +23,4 @@ open foo O_RDWR|O_CREAT 0777
 close foo
 unlink foo
 sync
-checkpoint 1
+checkpoint 0

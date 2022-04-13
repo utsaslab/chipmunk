@@ -26,5 +26,5 @@ close ACbar
 unlink ACbar
 open ACfoo O_RDWR|O_CREAT 0777
 fsync ACfoo
-checkpoint 1
+checkpoint 0
 close ACfoo

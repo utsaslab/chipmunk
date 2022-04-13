@@ -26,5 +26,5 @@ close Afoo
 rename Afoo ACbar
 opendir AC 0777
 fsync AC
-checkpoint 1
+checkpoint 0
 close AC

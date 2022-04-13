@@ -24,5 +24,5 @@ open Afoo O_RDWR|O_CREAT 0777
 fsetxattr Afoo
 removexattr Afoo
 sync
-checkpoint 1
+checkpoint 0
 close Afoo

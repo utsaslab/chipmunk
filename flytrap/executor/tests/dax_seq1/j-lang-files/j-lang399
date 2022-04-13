@@ -24,8 +24,7 @@ mkdir AC 0777
 opendir AC 0777
 close AC
 rename AC B
-mkdir AC 0777
-opendir AC 0777
-fsync AC
-checkpoint 1
-close AC
+opendir B 0777
+fsync B
+checkpoint 0
+close B

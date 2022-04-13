@@ -23,5 +23,5 @@ open foo O_RDWR|O_CREAT 0777
 dwrite foo 0 32768
 opendir test 0777
 fsync test
-checkpoint 1
+checkpoint 0
 close test

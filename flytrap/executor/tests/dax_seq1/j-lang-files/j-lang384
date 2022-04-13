@@ -25,4 +25,4 @@ open ACbar O_RDWR|O_CREAT 0777
 close ACbar
 rename ACbar Abar
 sync
-checkpoint 1
+checkpoint 0

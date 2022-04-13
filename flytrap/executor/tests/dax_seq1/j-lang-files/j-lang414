@@ -24,6 +24,6 @@ fsetxattr foo
 removexattr foo
 opendir test 0777
 fsync test
-checkpoint 1
+checkpoint 0
 close foo
 close test

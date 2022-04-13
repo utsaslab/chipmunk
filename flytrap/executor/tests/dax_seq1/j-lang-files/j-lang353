@@ -24,7 +24,8 @@ mkdir AC 0777
 open bar O_RDWR|O_CREAT 0777
 close bar
 rename bar ACbar
-open ACfoo O_RDWR|O_CREAT 0777
-fsync ACfoo
-checkpoint 1
-close ACfoo
+open foo O_RDWR|O_CREAT 0777
+unlink foo
+fsync foo
+checkpoint 0
+close foo

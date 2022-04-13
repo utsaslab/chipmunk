@@ -24,6 +24,6 @@ write foo 0 32768
 falloc foo FALLOC_FL_KEEP_SIZE 32768 32768
 opendir test 0777
 fsync test
-checkpoint 1
+checkpoint 0
 close foo
 close test

@@ -23,4 +23,4 @@ open bar O_RDWR|O_CREAT 0777
 close bar
 unlink bar
 sync
-checkpoint 1
+checkpoint 0

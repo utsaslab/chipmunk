@@ -22,5 +22,5 @@ local_checkpoint
 open foo O_RDWR|O_CREAT 0777
 write foo 0 32768
 mmapwrite foo 32768 32768
-checkpoint 1
+checkpoint 0
 close foo

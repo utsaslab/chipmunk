@@ -25,4 +25,4 @@ open foo O_RDWR|O_CREAT 0777
 close foo
 rename foo ACbar
 sync
-checkpoint 1
+checkpoint 0

@@ -23,7 +23,7 @@ mkdir A 0777
 open Afoo O_RDWR|O_CREAT 0777
 close Afoo
 rename Afoo bar
-opendir A 0777
-fsync A
-checkpoint 1
-close A
+opendir test 0777
+fsync test
+checkpoint 0
+close test

@@ -24,4 +24,4 @@ open Abar O_RDWR|O_CREAT 0777
 close Abar
 remove Abar
 sync
-checkpoint 1
+checkpoint 0

@@ -24,7 +24,8 @@ mkdir AC 0777
 open Afoo O_RDWR|O_CREAT 0777
 close Afoo
 rename Afoo ACbar
-open ACfoo O_RDWR|O_CREAT 0777
-fsync ACfoo
-checkpoint 1
-close ACfoo
+open Afoo O_RDWR|O_CREAT 0777
+unlink Afoo
+fsync Afoo
+checkpoint 0
+close Afoo
