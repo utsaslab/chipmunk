@@ -80,7 +80,7 @@ public:
                     std::vector <std::vector<struct write_op *>> &combos);
 
 
-    int make_replay(std::string test_name, std::string replay_path, std::string replica_path,
+    int make_replay(std::string test_name, std::string replica_path,
                         std::vector<struct write_op *> writes, std::ofstream &log);
 
     bool run_check(std::string test_name, std::ofstream& log, int checkpoint, bool syscall_finished);
@@ -97,8 +97,8 @@ public:
     bool check_fs_contents2(int checkpoint, std::ofstream& diff_file, std::ofstream& log, bool syscall_finished);
     int make_and_check_crash_states(int fd_replay, int fd, int checkpoint, std::ofstream& log, std::string test_name, std::ofstream& trace_file, bool make_trace, int &mod_index, bool reorder);
     int check_crash_state(int fd_replay, std::string test_name, std::ofstream& log, int checkpoint, bool reorder, bool syscall_finished);
-    // int find_disk_mod(struct syscall_record sr, int mod_index, std::ofstream& log);
     int find_disk_mod(struct syscall_record sr, std::ofstream& log, std::ofstream& oracle_diff_file);
+    int check_async_crash(std::ofstream& log);
 
     std::vector<struct write_op*> write_queue;
     std::vector<struct write_op *> epoch_data_writes;
@@ -132,7 +132,8 @@ protected:
 
     fs_testing::utils::ClassLoader<fs_testing::tests::BaseTestCase> test_loader;
 
-    std::vector <std::vector<fs_testing::utils::DiskMod>> mods_;
+    // std::vector <std::vector<fs_testing::utils::DiskMod>> mods_;
+    std::vector<fs_testing::utils::DiskMod> mods_;
 
     std::string test_name;
 

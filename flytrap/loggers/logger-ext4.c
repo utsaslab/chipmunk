@@ -691,7 +691,7 @@ static int insert_checkpoint(void) {
     struct write_op* new_op;
 
     if (Log.logging_on) {
-        // printk(KERN_INFO "CHECKPOINT\n");
+        printk(KERN_INFO "CHECKPOINT\n");
         new_op = kzalloc(sizeof(struct write_op), GFP_KERNEL);
         // new_kp->kp = kzalloc(sizeof(struct kprobe), GFP_NOWAIT);
         if (new_op == NULL) {

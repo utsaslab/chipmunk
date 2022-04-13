@@ -39,6 +39,7 @@ int Tester::mount_fs(bool init) {
     string command;
     string opts = mount_opts;
     // make sure winefs is mounted in strict mode
+    // TODO: make this an optional thing for both winefs and other fses with a strict mode
     if (fs.compare("winefs") == 0) {
         opts += ",strict";
         check_data = true;
@@ -48,17 +49,18 @@ int Tester::mount_fs(bool init) {
         command = "dd if=/dev/zero of=" + device_path + " bs=100M > /dev/null 2>&1";
         system(command.c_str());
         if (fs == "ext4") {
-            command = "mkfs.ext4 " + device_path + " > /dev/null 2>&1";
+            // TODO: look up and use the correct blocksize
+            command = "mkfs.ext4 -b 4096 " + device_path + " > /dev/null 2>&1";
             ret = system(command.c_str());
             if (ret < 0) {
                 perror("mkfs.ext4");
                 return ret;
             }
+            opts = "dax=always";
             ret = mount(device_path.c_str(), device_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
         }
         else {
             opts = ",init" + opts;
-            cout << "mount opts: " << opts << endl;
             ret = mount(device_path.c_str(), device_mount_point.c_str(), fs.c_str(), 0, opts.c_str());
         }
     }
@@ -131,18 +133,14 @@ void Tester::free_queue(vector<struct write_op*> &q) {
 }
 
 int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_trace, bool reorder) {
-    // FILE* fptr;
     int fd_replay;
     int fd;
     int checkpoint_count = 0;
     ofstream trace_file;
     int ret;
     string filename;
-    // string replay_name = "code/replay/nova_replay.img";
-    // string replay_name = "/tmp/nova_replay.img";
     string replay_name = replay_device_path;
 
-    // remove("code/replay/base_replay.img");
     remove(base_replay_path.c_str()); // TODO: is this necessary since we truncate it in cleanup?
 
     string command = "dd if=/dev/pmem1 of=/dev/zero bs=128M > /dev/null 2>&1";
@@ -166,9 +164,8 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
     // open up the dummy device that gives us logged writes via ioctl
     fd = open("/dev/ioctl_dummy", 0);
     if (fd < 0) {
-        perror("open 5");
-        // fclose(fptr);
         close(fd_replay);
+        perror("open");
         unmount_fs();
         return -1;
     }
@@ -183,7 +180,6 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
             if (ret < 0) {
                 perror("remove trace");
                 close(fd);
-                // fclose(fptr);
                 close(fd_replay);
                 unmount_fs();
                 return ret;
@@ -191,10 +187,8 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
         }
         trace_file.open(filename);
         if (!trace_file.is_open()) {
-            // ret = false;
-            perror("open 6");
+            perror("open");
             close(fd);
-            // fclose(fptr);
             close(fd_replay);
             unmount_fs();
             return -1;
@@ -210,7 +204,6 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
         unmount_fs();
         return ret;
     }
-    log << "FINISHED GETTING WRITE LOG" << endl;
 
     ret = ioctl(fd, LOGGER_FREE_LOG, NULL);
     if (ret < 0) {
@@ -248,10 +241,12 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
 
     sfence_count = 0;
     while (head != NULL) {
-        // ret = process_log_entry(fptr, fd, checkpoint, checkpoint_count, log, test_name, trace_file, make_trace, reorder);
         ret = process_log_entry(fd_replay, fd, checkpoint, checkpoint_count, log, test_name, trace_file, make_trace, reorder, oracle_diff_file);
         if (ret != 0) {
             break;
+        }
+        if (head == NULL) {
+            cout << "reached end of log" << endl;
         }
     }
 
@@ -264,7 +259,6 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
     if (make_trace) {
         trace_file.close();
     }
-    // close_fptrs();
     close(fd_replay);
     close(fd);
     // close all open files so we don't have issues unmounting the file system
@@ -383,14 +377,13 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
                 last_successful_syscall_end_mark = new_op;
             } 
         } else if (new_op->metadata->type == CHECKPOINT) {
-            if (fs_mounted && fs != "ext4")
+            if (fs_mounted)
                 log << "CHECKPOINT" << ", " << new_op->metadata->pid << endl;
             checkpoint_count++;
-            // TODO: have the number of checkpoints match the number of threads
-            // and let the user specify this (or something)
+            // TODO: we aren't using number of threads anymore, so this doesn't make sense.
+            // we should always just stop on the first checkpoint. we can remove a lot of 
+            // the weird stuff about counting checkpoints
             if (checkpoint_count == num_threads) 
-                return 1;
-            if ((fs == "ext4" || !reorder) && checkpoint_count == checkpoint) 
                 return 1;
         }
 
@@ -504,17 +497,14 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
     // check the metadata type to determine what to do with the log entry
     switch(new_op->metadata->type) {
         case SFENCE:
-            // if (fs_mounted)
-                log << "SFENCE, " << new_op->metadata->pid << endl;
+            log << "SFENCE, " << new_op->metadata->pid << endl;
             // if there haven't been any writes since the last sfence,
             // we don't have to do anything
-            if (unordered_write) {
+            if (unordered_write && reorder) {
                 ret = make_and_check_crash_states(fd_replay, fd, checkpoint, log, test_name, trace_file, make_trace, mod_index, reorder);
                 if (ret < 0) {
                     return ret;
                 }
-                // write_queue.push_back(new_op);
-                log << "flushing << " << write_queue.size() << " entries " << endl;
                 for (size_t i = 0; i < write_queue.size(); i++) {
                     log << i << " " << std::hex << write_queue[i]->metadata->dst << ", " << std::dec;
                 }
@@ -527,26 +517,20 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                 free_modified_writes();
                 unordered_write = false;
                 if (!passed) {
-                    // log << "FAILED" << endl;
                     return passed;
                 }
-            } else {
-                log << "No unordered writes" << endl;
-                log << "Outstanding writes: ";
-                for (size_t i = 0; i < write_queue.size(); i++) {
-                    log << std::hex << write_queue[i]->metadata->dst << ", " << std::dec;
-                }
-                log << endl;
+            } else if (!reorder) {
+                // ext4-dax and xfs-dax case: just flush entries
+                ret = flush_entries(fd_replay, new_op, trace_file, make_trace, log, write_queue, reorder);
+                free_queue(write_queue);
+                free_modified_writes();
             }
             break;
         case CLWB:
-            // if (fs_mounted)
-                log << "CLWB " << std::hex << new_op->metadata->dst << std::dec << ", " << new_op->metadata->len << ", " << new_op->metadata->likely_data << ", " << new_op->metadata->pid << endl;
-                // cout << "CLWB" << endl;
+            log << "CLWB " << std::hex << new_op->metadata->dst << std::dec << ", " << new_op->metadata->len << ", " << new_op->metadata->likely_data << ", " << new_op->metadata->pid << endl;
             if (new_op->metadata->likely_data == 1) {
                 epoch_data_writes.push_back(new_op);
             }
-            // enqueue_to_queues(new_op);
             write_queue.push_back(new_op);
             unordered_write = true;
             break;
@@ -558,8 +542,19 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
         case CHECKPOINT:
             log << "CHECKPOINT" << ", " << new_op->metadata->pid << endl;
             checkpoint_count++;
-            if (unordered_write) {
+            if (unordered_write && reorder) {
                 ret = make_and_check_crash_states(fd_replay, fd, checkpoint, log, test_name, trace_file, make_trace, mod_index, reorder);
+                if (ret < 0) {
+                    return ret;
+                }
+            } else if (!reorder) {
+                // TODO: this isn't working because we are not actually adding a checkpoint entry 
+                // into the user space log, I think; the log just ends and this function never runs
+                // THIS NEEDS TO BE FIXED IN ORDER FOR EXT4 AND XFS TESTING TO WORK
+                cout << "HIT CHECKPOINT" << endl;
+                // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
+                // and we don't want to provide full reordering - we only want to crash after sync calls
+                ret = check_async_crash(log);
                 if (ret < 0) {
                     return ret;
                 }
@@ -633,13 +628,10 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
 
     // mod_index starts at -1, so this loop should handle things correctly
     // for the first syscall/disk mod
-    // if we're doing this, we're in brute force mode, which means we're only using 
-    // mods_[0]
     // TODO: to support the fuzzer, may need to add read; should add openat, ftruncate, lseek?
     // TODO: this could use refactoring
-    // assert(mod_index+1 <= mods_[0].size());
-    for (unsigned int i = mod_index+1; i < mods_[0].size(); i++) {
-        DiskMod mod = mods_[0][i];
+    for (unsigned int i = mod_index+1; i < mods_.size(); i++) {
+        DiskMod mod = mods_[i];
         switch (sr.syscall_num) {
             case SYS_mknod:
                 assert(0 && "Mknod is not supported");
@@ -1489,7 +1481,17 @@ out:
     
 }
 
-int Tester::make_and_check_crash_states(int fd_replay, int fd, int checkpoint, ofstream& log, string test_name, ofstream& trace_file, bool make_trace, int &mod_index, bool reorder) {
+int Tester::make_and_check_crash_states(
+    int fd_replay, 
+    int fd, 
+    int checkpoint, 
+    ofstream& log, 
+    string test_name, 
+    ofstream& trace_file, 
+    bool make_trace, 
+    int &mod_index, 
+    bool reorder) 
+{
     unsigned int i, j;
     int ret;
     // int passed = 0;
@@ -1532,7 +1534,7 @@ int Tester::make_and_check_crash_states(int fd_replay, int fd, int checkpoint, o
                 }
                 subset_trace.close();
             }
-            ret = make_replay(test_name2, "/tmp/nova_replay.img", replay_device_path, new_subsets[i], log);
+            ret = make_replay(test_name2, replay_device_path, new_subsets[i], log);
             time_point<steady_clock> create_state = steady_clock::now();
             elapsed = duration_cast<milliseconds>(create_state - run_test_start);
             log << "time to create crash state: " << elapsed.count() << endl;
@@ -1643,6 +1645,74 @@ int Tester::check_crash_state(int fd_replay, string test_name, ofstream& log, in
     return 0;
 }
 
+/*
+ * This function is only called when we hit a checkpoint in non synchronous
+ * file system like ext4 dax or xfs dax. Checkpoints are only placed after fsyncs
+ * so the current state of the replay device is the final crash state that we will
+ * check.
+ * TODO: since we don't have to roll back and replay to obtain different crash states,
+ * we can probably disable the management of the base replay device when this type 
+ * of file system is being tested; would improve performance a bit
+ */
+int Tester::check_async_crash(ofstream& log) {
+    int ret, fd_ioctl;
+    milliseconds elapsed;
+
+    time_point<steady_clock> check_state = steady_clock::now();
+
+    // make sure the log is empty, turn off logging.
+    // we don't need undo logging here.
+    // TODO: make a separate function for turning off and clearing the log
+
+    fd_ioctl = open("/dev/ioctl_dummy", 0);
+    if (fd_ioctl < 0) {
+        perror("Unable to open IOCTL device");
+        log << "Unable to open IOCTL device; is logger module loaded?" << endl;
+        return fd_ioctl;
+    }
+    ret = ioctl(fd_ioctl, LOGGER_LOG_OFF, NULL);
+    if (ret < 0) {
+        perror("ioctl");
+        log << "Error turning off logging" << endl;
+        close(fd_ioctl);
+        return ret;
+    }
+    ret = ioctl(fd_ioctl, LOGGER_FREE_LOG, NULL);
+    if (ret < 0) {
+        perror("ioctl");
+        log << "Error freeing log via IOCTL" << endl;
+        close(fd_ioctl);
+        return ret;
+    }
+    close(fd_ioctl);
+
+    // clear dmesg logs so we can look at them for errors without scanning the 
+    // entire thing from boot and past tests
+    string command = "dmesg -C";
+    system(command.c_str());
+
+    // now iterate over the mods and perform checks
+    // checks on sync file systems use an index variable to keep track of 
+    // where we are in the workload, but since we only crash at the end here,
+    // we'll iterate over the whole thing
+    for (unsigned int i = 0; i < mods_.size(); i++) {
+        DiskMod mod = mods_[i];
+        if (mod.mod_type == DiskMod::kFsyncMod) {
+            log << "fsync mod" << endl;
+        } else if (mod.mod_type == DiskMod::kSyncMod) {
+            log << "sync mod" << endl;
+        } else if (mod.mod_type == DiskMod::kDataMod || 
+            mod.mod_type == DiskMod::kSyncFileRangeMod) {
+            log << "data mod or sync file range mod" << endl;
+        }
+    }
+
+    elapsed = duration_cast<milliseconds>(steady_clock::now() - check_state);
+    log << "time to test crash state: " << elapsed.count() << endl;
+
+    return 0;
+}
+
 int Tester::write_stack_trace(struct write_op* op, ofstream& trace_file) {
     int ret;
     for (unsigned int i = 0; i < op->metadata->nr_entries; i++) {
@@ -1743,7 +1813,7 @@ void Tester::choose(int n, int k, vector<struct write_op*> op_vec, vector<struct
     }
 }
 
-int Tester::make_replay(string test_name, string replay_src_path, string replica_path, vector<struct write_op*> writes, ofstream& log) {
+int Tester::make_replay(string test_name, string replica_path, vector<struct write_op*> writes, ofstream& log) {
     int ret, offset;
     string command;
     int fd;
@@ -2165,13 +2235,7 @@ int Tester::modify_data_writes(vector<vector<struct write_op*> > &new_subsets, v
 bool Tester::check_fs_contents2(int checkpoint, ofstream& diff_file, ofstream& log, bool syscall_finished) {
     bool ret;
     bool passed = true;
-    // mods_ is technically a 2D vector, but for now assume we only use the first entry
-    // TODO: make sure this is compatible with ext4? or write a separate checker
-    // for now assume that only the first vector in the mod list is used
-    // TODO: this may not be true when we extend to ext4
-    // for (int i = 0; i <= mod_index; i++) {
-    // DiskMod mod = mods_[0][i];
-    DiskMod mod = mods_[0][mod_index];
+    DiskMod mod = mods_[mod_index];
     string path(mod.path);
 
     diff_file << syscall_list << endl;
@@ -2481,17 +2545,7 @@ int Tester::GetChangeData(const int fd) {
       return res;
     }
 
-    if (mod.mod_type == DiskMod::kCheckpointMod) {
-      // We found a checkpoint, so switch to a new set of DiskMods.
-      mods_.push_back(vector<DiskMod>());
-    } else {
-      if (mods_.empty()) {
-        // We're just starting, so give us a place to put the mods.
-        mods_.push_back(vector<DiskMod>());
-      }
-      // Just append this DiskMod to the end of the last set of DiskMods.
-      mods_.back().push_back(mod);
-    }
+    mods_.push_back(mod);
   }
   return SUCCESS;
 }

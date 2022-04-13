@@ -99,7 +99,7 @@ static const option long_options[] = {
 
 int main(int argc, char* argv[]) {
     int option_index = 0;
-    int ret, fd;
+    int ret, fd, r;
     string command;
     string test_file_path = "";
     bool verbose = false;
@@ -205,15 +205,17 @@ int main(int argc, char* argv[]) {
     }
     command = "rmmod logger_" + fs_type;
     system(command.c_str());
-    command = "rmmod " + fs_type + " -f";
-    system(command.c_str());
-    // TODO: don't rely on hardcoded absolute paths
-    command = "insmod /root/tmpdir/linux-5.1/fs/" + fs_type + "/" + fs_type + ".ko";
-    int r = system(command.c_str());
-	if (r < 0) {
-		cout << "failed to load fs module" << endl;
-        return r;
-	}
+    if (fs != "ext4") {
+        command = "rmmod " + fs_type + " -f";
+        system(command.c_str());
+        // TODO: don't rely on hardcoded absolute paths
+        command = "insmod /root/tmpdir/linux-5.1/fs/" + fs_type + "/" + fs_type + ".ko";
+        r = system(command.c_str());
+        if (r < 0) {
+            cout << "failed to load fs module" << endl;
+            return r;
+        }
+    }
     command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-" + fs_type + ".ko";
     r = system(command.c_str());
 	if (r < 0) {
@@ -468,21 +470,6 @@ int main(int argc, char* argv[]) {
     logfile << "time to read disk mods " << elapsed.count() << endl;
     logfile << "----------------------------" << endl;
 
-    // // now that we have profiled, we can create oracle files for files that had data writes
-    // // only do this if the check_data option is set; if it's not, we aren't checking for data 
-    // // atomicity, so there's no reason to create oracles
-    // // TODO: remove this
-    // if (check_data) {
-    //     ret = tester->create_oracle_files();
-    //     if (ret < 0) {
-    //         logfile << "Error creating oracle files" << endl;
-    //         close(change_fd);
-    //         tester->cleanup(logfile);
-    //         logfile.close();
-    //         return ret;
-    //     }
-    // }
-
     if (verbose) {
         printf("Running replay and checking for bugs\n");
     }
@@ -537,14 +524,6 @@ int main(int argc, char* argv[]) {
     time_point<steady_clock> replay_start = steady_clock::now();
 
     ret = tester->replay(logfile, checkpoint, test_name, make_trace, reorder);
-    // for (auto const &x : tester->sys2writes) {
-	// logfile << "SYSCALL: " << x.first << " ";
-	// for (auto const &i : tester->sys2writes[x.first]) {
-	// 	logfile << i << ",";
-	// }
-	// logfile << "\n";
-    // }
-    // ret = tester->replay(checkpoint, test_name, make_trace);
     if (ret != 0) {
         perror("replay");
         logfile << "Error replaying writes, error code " << ret << endl;
@@ -634,15 +613,6 @@ int set_up_imgs(string pm_device, string path_to_base_img, bool verbose) {
     if (verbose) {
        printf("Setting up PM device and file system images\n");
     }
-
-    // // in past testing scripts, we've zeroed the PM device and then 
-    // // used dd to copy the base image onto it; use the same approach
-    // command = ZERO1 + pm_device + ZERO2;
-    // ret = system(command.c_str());
-    // if (ret < 0) {
-    //     perror("system (dd zero)");
-    //     return ret;
-    // }
 
     remove("/tmp/nova_replay.img");
 
