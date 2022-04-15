@@ -538,14 +538,9 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                     return ret;
                 }
             } else if (!reorder) {
-                log << "CHECKPOINT" << ", " << new_op->metadata->pid << endl;
-                // TODO: this isn't working because we are not actually adding a checkpoint entry 
-                // into the user space log, I think; the log just ends and this function never runs
-                // THIS NEEDS TO BE FIXED IN ORDER FOR EXT4 AND XFS TESTING TO WORK
-                cout << "HIT CHECKPOINT" << endl;
                 // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
                 // and we don't want to provide full reordering - we only want to crash after sync calls
-                ret = check_async_crash(log);
+                ret = check_async_crash(test_name, log);
                 if (ret < 0) {
                     return ret;
                 }
@@ -1593,11 +1588,20 @@ int Tester::check_crash_state(int fd_replay, string test_name, ofstream& log, in
  * we can probably disable the management of the base replay device when this type 
  * of file system is being tested; would improve performance a bit
  */
-int Tester::check_async_crash(ofstream& log) {
+int Tester::check_async_crash(string test_name, ofstream& log) {
     int ret, fd_ioctl;
     milliseconds elapsed;
+    string path, command;
+    DiskMod mod;
+    bool passed = true;
+    SingleTestInfo test_info;
+    test_info.test_num = 0; // TODO: this is wrong. do we have to set this?
 
     time_point<steady_clock> check_state = steady_clock::now();
+
+    ofstream diff_file;
+    string diff_name = diff_path + "diff-" + test_name;
+    diff_file.open(diff_name, std::fstream::out | std::fstream::app);
 
     // make sure the log is empty, turn off logging.
     // we don't need undo logging here.
@@ -1607,27 +1611,31 @@ int Tester::check_async_crash(ofstream& log) {
     if (fd_ioctl < 0) {
         perror("Unable to open IOCTL device");
         log << "Unable to open IOCTL device; is logger module loaded?" << endl;
-        return fd_ioctl;
+        ret = fd_ioctl;
+        passed = false;
+        goto async_out;
     }
     ret = ioctl(fd_ioctl, LOGGER_LOG_OFF, NULL);
     if (ret < 0) {
         perror("ioctl");
         log << "Error turning off logging" << endl;
         close(fd_ioctl);
-        return ret;
+        passed = false;
+        goto async_out;
     }
     ret = ioctl(fd_ioctl, LOGGER_FREE_LOG, NULL);
     if (ret < 0) {
         perror("ioctl");
         log << "Error freeing log via IOCTL" << endl;
         close(fd_ioctl);
-        return ret;
+        passed = false;
+        goto async_out;
     }
     close(fd_ioctl);
 
     // clear dmesg logs so we can look at them for errors without scanning the 
     // entire thing from boot and past tests
-    string command = "dmesg -C";
+    command = "dmesg -C";
     system(command.c_str());
 
     // now iterate over the mods and perform checks
@@ -1635,9 +1643,16 @@ int Tester::check_async_crash(ofstream& log) {
     // where we are in the workload, but since we only crash at the end here,
     // we'll iterate over the whole thing
     for (unsigned int i = 0; i < mods_.size(); i++) {
-        DiskMod mod = mods_[i];
+        mod = mods_[i];
+        path = mod.path;
         if (mod.mod_type == DiskMod::kFsyncMod) {
-            log << "fsync mod" << endl;
+            // compare files at the fsynced path between the crashed state 
+            // and the oracle
+            ret = oracle_state.check_generic(path, diff_file, log, true);
+            if (!ret) {
+                passed = false;
+                goto async_out;
+            }
         } else if (mod.mod_type == DiskMod::kSyncMod) {
             log << "sync mod" << endl;
         } else if (mod.mod_type == DiskMod::kDataMod || 
@@ -1646,10 +1661,35 @@ int Tester::check_async_crash(ofstream& log) {
         }
     }
 
+    ret = make_files(replay_mount_point, diff_file);
+    if (!ret) {
+        passed = false;
+        goto async_out;
+    }
+
+    ret = delete_files(replay_mount_point, diff_file);
+    if (!ret) {
+        passed = false;
+        goto async_out;
+    }
+
     elapsed = duration_cast<milliseconds>(steady_clock::now() - check_state);
     log << "time to test crash state: " << elapsed.count() << endl;
 
-    return 0;
+async_out:
+    diff_file.close();
+
+    if (passed) {
+        ret = remove(diff_name.c_str());
+        if (ret < 0) {
+            return ret;
+        }
+        return 0;
+    } else {
+        test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
+        test_info.PrintResults(log, test_name );
+        return -1;
+    }
 }
 
 // TODO: this is not used and most likely does not work correctly. remove it entirely? or fix it?
@@ -1808,7 +1848,7 @@ bool Tester::run_check(string test_name, ofstream& log, int checkpoint, bool sys
     bool retval;
     unsigned int nthreads = std::thread::hardware_concurrency();
     SingleTestInfo test_info;
-    test_info.test_num = checkpoint; 
+    test_info.test_num = checkpoint; // TODO: this is wrong
 
     ofstream diff_file;
     string diff_name = diff_path + "diff-" + test_name;
