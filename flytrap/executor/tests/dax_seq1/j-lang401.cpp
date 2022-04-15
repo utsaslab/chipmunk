@@ -69,24 +69,19 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmMkdir(AC_path.c_str() , 0777) < 0){ 
+				int fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_Afoo < 0 ) { 
+					cm_->CmClose( fd_Afoo); 
 					return errno;
 				}
 
 
-				int fd_AC = cm_->CmOpen(AC_path.c_str() , O_DIRECTORY , 0777); 
-				if ( fd_AC < 0 ) { 
-					cm_->CmClose( fd_AC); 
+				if ( fsetxattr( fd_Afoo, "user.xattr1", "val1 ", 4, 0 ) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmClose ( fd_AC) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmRename (AC_path.c_str() , B_path.c_str() ) < 0){ 
+				if ( removexattr(Afoo_path.c_str() , "user.xattr1") < 0){ 
 					return errno;
 				}
 
@@ -109,6 +104,11 @@ namespace fs_testing {
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
 					return 0;
+				}
+
+
+				if ( cm_->CmClose ( fd_Afoo) < 0){ 
+					return errno;
 				}
 
 

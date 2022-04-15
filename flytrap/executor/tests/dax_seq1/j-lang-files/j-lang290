@@ -19,8 +19,10 @@ local_checkpoint
 
 
 # run
-open foo O_RDWR|O_CREAT 0777
-close foo
-remove foo
+mkdir A 0777
+mkdir AC 0777
+open ACbar O_RDWR|O_CREAT 0777
+close ACbar
+remove ACbar
 sync
 checkpoint 0

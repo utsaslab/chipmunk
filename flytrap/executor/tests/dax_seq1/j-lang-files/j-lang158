@@ -21,8 +21,7 @@ local_checkpoint
 # run
 open foo O_RDWR|O_CREAT 0777
 dwrite foo 0 32768
-open foo O_RDWR|O_CREAT 0777
-unlink foo
-fsync foo
+opendir test 0777
+fsync test
 checkpoint 0
-close foo
+close test

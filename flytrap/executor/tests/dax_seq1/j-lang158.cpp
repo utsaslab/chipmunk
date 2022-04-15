@@ -103,19 +103,14 @@ namespace fs_testing {
 					return errno;
 				}
 
-				 fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_foo < 0 ) { 
-					cm_->CmClose( fd_foo); 
+				int fd_test = cm_->CmOpen(test_path.c_str() , O_DIRECTORY , 0777); 
+				if ( fd_test < 0 ) { 
+					cm_->CmClose( fd_test); 
 					return errno;
 				}
 
 
-				if ( cm_->CmUnlink(foo_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmFsync( fd_foo) < 0){ 
+				if ( cm_->CmFsync( fd_test) < 0){ 
 					return errno;
 				}
 
@@ -129,7 +124,7 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_foo) < 0){ 
+				if ( cm_->CmClose ( fd_test) < 0){ 
 					return errno;
 				}
 

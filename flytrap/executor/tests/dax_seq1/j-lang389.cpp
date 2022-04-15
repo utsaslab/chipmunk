@@ -64,41 +64,26 @@ namespace fs_testing {
 				ACbar_path =  mnt_dir_ + "/A/C/bar";
 				int local_checkpoint = 0 ;
 
-				if ( cm_->CmMkdir(A_path.c_str() , 0777) < 0){ 
+				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_foo < 0 ) { 
+					cm_->CmClose( fd_foo); 
 					return errno;
 				}
 
 
-				int fd_A = cm_->CmOpen(A_path.c_str() , O_DIRECTORY , 0777); 
-				if ( fd_A < 0 ) { 
-					cm_->CmClose( fd_A); 
+				if ( fsetxattr( fd_foo, "user.xattr1", "val1 ", 4, 0 ) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmClose ( fd_A) < 0){ 
+				int fd_test = cm_->CmOpen(test_path.c_str() , O_DIRECTORY , 0777); 
+				if ( fd_test < 0 ) { 
+					cm_->CmClose( fd_test); 
 					return errno;
 				}
 
 
-				if ( cm_->CmRename (A_path.c_str() , AC_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmMkdir(B_path.c_str() , 0777) < 0){ 
-					return errno;
-				}
-
-
-				int fd_B = cm_->CmOpen(B_path.c_str() , O_DIRECTORY , 0777); 
-				if ( fd_B < 0 ) { 
-					cm_->CmClose( fd_B); 
-					return errno;
-				}
-
-
-				if ( cm_->CmFsync( fd_B) < 0){ 
+				if ( cm_->CmFsync( fd_test) < 0){ 
 					return errno;
 				}
 
@@ -112,7 +97,12 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_B) < 0){ 
+				if ( cm_->CmClose ( fd_foo) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmClose ( fd_test) < 0){ 
 					return errno;
 				}
 

@@ -20,10 +20,9 @@ local_checkpoint
 
 # run
 open foo O_RDWR|O_CREAT 0777
-fsetxattr foo
-open bar O_RDWR|O_CREAT 0777
-unlink bar
-fsync bar
+write foo 0 32768
+truncate foo 0
+unlink foo
+fsync foo
 checkpoint 0
 close foo
-close bar

@@ -64,24 +64,19 @@ namespace fs_testing {
 				ACbar_path =  mnt_dir_ + "/A/C/bar";
 				int local_checkpoint = 0 ;
 
-				if ( cm_->CmMkdir(A_path.c_str() , 0777) < 0){ 
+				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_foo < 0 ) { 
+					cm_->CmClose( fd_foo); 
 					return errno;
 				}
 
 
-				int fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_Afoo < 0 ) { 
-					cm_->CmClose( fd_Afoo); 
+				if ( cm_->CmClose ( fd_foo) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmClose ( fd_Afoo) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmRemove(Afoo_path.c_str() ) < 0){ 
+				if ( cm_->CmRename (foo_path.c_str() , bar_path.c_str() ) < 0){ 
 					return errno;
 				}
 

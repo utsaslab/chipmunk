@@ -69,19 +69,31 @@ namespace fs_testing {
 				}
 
 
-				int fd_bar = cm_->CmOpen(bar_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_bar < 0 ) { 
-					cm_->CmClose( fd_bar); 
+				if ( cm_->CmMkdir(AC_path.c_str() , 0777) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmLink (bar_path.c_str() , Abar_path.c_str() ) < 0){ 
+				int fd_Abar = cm_->CmOpen(Abar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_Abar < 0 ) { 
+					cm_->CmClose( fd_Abar); 
 					return errno;
 				}
 
 
-				cm_->CmSync(); 
+				if ( cm_->CmLink (Abar_path.c_str() , ACbar_path.c_str() ) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmUnlink(Abar_path.c_str() ) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmFsync( fd_Abar) < 0){ 
+					return errno;
+				}
 
 
 				if ( cm_->CmCheckpoint() < 0){ 
@@ -93,7 +105,7 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_bar) < 0){ 
+				if ( cm_->CmClose ( fd_Abar) < 0){ 
 					return errno;
 				}
 

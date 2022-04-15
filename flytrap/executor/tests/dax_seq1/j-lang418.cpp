@@ -76,24 +76,30 @@ namespace fs_testing {
 				}
 
 
-				if ( fsetxattr( fd_Afoo, "user.xattr1", "val1 ", 4, 0 ) < 0){ 
+				if ( cm_->CmWriteData ( fd_Afoo, 0, 32768) < 0){ 
+					cm_->CmClose( fd_Afoo); 
 					return errno;
 				}
 
 
-				if ( removexattr(Afoo_path.c_str() , "user.xattr1") < 0){ 
+				if ( cm_->CmTruncate (Afoo_path.c_str(), 2500) < 0){ 
 					return errno;
 				}
 
 
-				int fd_A = cm_->CmOpen(A_path.c_str() , O_DIRECTORY , 0777); 
-				if ( fd_A < 0 ) { 
-					cm_->CmClose( fd_A); 
+				int fd_Abar = cm_->CmOpen(Abar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_Abar < 0 ) { 
+					cm_->CmClose( fd_Abar); 
 					return errno;
 				}
 
 
-				if ( cm_->CmFsync( fd_A) < 0){ 
+				if ( cm_->CmUnlink(Abar_path.c_str() ) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmFsync( fd_Abar) < 0){ 
 					return errno;
 				}
 
@@ -112,7 +118,7 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_A) < 0){ 
+				if ( cm_->CmClose ( fd_Abar) < 0){ 
 					return errno;
 				}
 

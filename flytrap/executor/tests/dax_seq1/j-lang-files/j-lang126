@@ -23,7 +23,8 @@ mkdir A 0777
 open Afoo O_RDWR|O_CREAT 0777
 write Afoo 0 32768
 falloc Afoo 0 0 5000
-unlink Afoo
-fsync Afoo
+opendir A 0777
+fsync A
 checkpoint 0
 close Afoo
+close A

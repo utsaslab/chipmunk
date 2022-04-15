@@ -22,8 +22,8 @@ local_checkpoint
 open foo O_RDWR|O_CREAT 0777
 write foo 0 32768
 dwrite foo 0 8192
-open bar O_RDWR|O_CREAT 0777
-unlink bar
-fsync bar
+open foo O_RDWR|O_CREAT 0777
+unlink foo
+fsync foo
 checkpoint 0
-close bar
+close foo

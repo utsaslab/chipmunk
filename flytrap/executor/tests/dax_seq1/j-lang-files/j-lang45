@@ -22,9 +22,7 @@ local_checkpoint
 open foo O_RDWR|O_CREAT 0777
 write foo 0 32768
 falloc foo FALLOC_FL_PUNCH_HOLE|FALLOC_FL_KEEP_SIZE 30768 5000
-open bar O_RDWR|O_CREAT 0777
-unlink bar
-fsync bar
+unlink foo
+fsync foo
 checkpoint 0
 close foo
-close bar

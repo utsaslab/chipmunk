@@ -69,6 +69,28 @@ namespace fs_testing {
 				}
 
 
+				if ( cm_->CmMkdir(AC_path.c_str() , 0777) < 0){ 
+					return errno;
+				}
+
+
+				int fd_AC = cm_->CmOpen(AC_path.c_str() , O_DIRECTORY , 0777); 
+				if ( fd_AC < 0 ) { 
+					cm_->CmClose( fd_AC); 
+					return errno;
+				}
+
+
+				if ( cm_->CmClose ( fd_AC) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmRename (AC_path.c_str() , B_path.c_str() ) < 0){ 
+					return errno;
+				}
+
+
 				int fd_A = cm_->CmOpen(A_path.c_str() , O_DIRECTORY , 0777); 
 				if ( fd_A < 0 ) { 
 					cm_->CmClose( fd_A); 
@@ -76,24 +98,7 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_A) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmRename (A_path.c_str() , B_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				int fd_B = cm_->CmOpen(B_path.c_str() , O_DIRECTORY , 0777); 
-				if ( fd_B < 0 ) { 
-					cm_->CmClose( fd_B); 
-					return errno;
-				}
-
-
-				if ( cm_->CmFsync( fd_B) < 0){ 
+				if ( cm_->CmFsync( fd_A) < 0){ 
 					return errno;
 				}
 
@@ -107,7 +112,7 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_B) < 0){ 
+				if ( cm_->CmClose ( fd_A) < 0){ 
 					return errno;
 				}
 

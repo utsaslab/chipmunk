@@ -74,36 +74,31 @@ namespace fs_testing {
 				}
 
 
-				int fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_Afoo < 0 ) { 
-					cm_->CmClose( fd_Afoo); 
+				int fd_bar = cm_->CmOpen(bar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_bar < 0 ) { 
+					cm_->CmClose( fd_bar); 
 					return errno;
 				}
 
 
-				if ( cm_->CmClose ( fd_Afoo) < 0){ 
+				if ( cm_->CmClose ( fd_bar) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmRename (Afoo_path.c_str() , ACbar_path.c_str() ) < 0){ 
+				if ( cm_->CmRename (bar_path.c_str() , ACbar_path.c_str() ) < 0){ 
 					return errno;
 				}
 
 
-				 fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_Afoo < 0 ) { 
-					cm_->CmClose( fd_Afoo); 
+				int fd_test = cm_->CmOpen(test_path.c_str() , O_DIRECTORY , 0777); 
+				if ( fd_test < 0 ) { 
+					cm_->CmClose( fd_test); 
 					return errno;
 				}
 
 
-				if ( cm_->CmUnlink(Afoo_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmFsync( fd_Afoo) < 0){ 
+				if ( cm_->CmFsync( fd_test) < 0){ 
 					return errno;
 				}
 
@@ -117,7 +112,7 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_Afoo) < 0){ 
+				if ( cm_->CmClose ( fd_test) < 0){ 
 					return errno;
 				}
 

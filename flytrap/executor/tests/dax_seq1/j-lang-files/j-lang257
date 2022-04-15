@@ -20,10 +20,11 @@ local_checkpoint
 
 # run
 mkdir A 0777
-mkdir AC 0777
-open ACbar O_RDWR|O_CREAT 0777
-link ACbar bar
-unlink ACbar
-fsync ACbar
+open Afoo O_RDWR|O_CREAT 0777
+close Afoo
+unlink Afoo
+open Abar O_RDWR|O_CREAT 0777
+unlink Abar
+fsync Abar
 checkpoint 0
-close ACbar
+close Abar

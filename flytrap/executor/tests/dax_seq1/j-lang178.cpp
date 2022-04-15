@@ -64,6 +64,11 @@ namespace fs_testing {
 				ACbar_path =  mnt_dir_ + "/A/C/bar";
 				int local_checkpoint = 0 ;
 
+				if ( cm_->CmMkdir(A_path.c_str() , 0777) < 0){ 
+					return errno;
+				}
+
+
 				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
 				if ( fd_foo < 0 ) { 
 					cm_->CmClose( fd_foo); 
@@ -71,41 +76,26 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmWriteData ( fd_foo, 0, 32768) < 0){ 
-					cm_->CmClose( fd_foo); 
+				if ( cm_->CmLink (foo_path.c_str() , Abar_path.c_str() ) < 0){ 
 					return errno;
 				}
 
 
-				if ( fallocate( fd_foo , 0 , 0 , 8192) < 0){ 
-					cm_->CmClose( fd_foo);
-					 return errno;
-				}
-				char *filep_foo = (char *) cm_->CmMmap(NULL, 8192 + 0, PROT_WRITE|PROT_READ, MAP_SHARED, fd_foo, 0);
-				if (filep_foo == MAP_FAILED) {
-					 return -1;
+				int fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_Afoo < 0 ) { 
+					cm_->CmClose( fd_Afoo); 
+					return errno;
 				}
 
-				int moffset_foo = 0;
-				int to_writefoo = 8192 ;
-				const char *mtext_foo  = "mmmmmmmmmmklmnopqrstuvwxyz123456";
 
-				while (moffset_foo < 8192){
-					if (to_writefoo < 32){
-						memcpy(filep_foo + 0 + moffset_foo, mtext_foo, to_writefoo);
-						moffset_foo += to_writefoo;
-					}
-					else {
-						memcpy(filep_foo + 0 + moffset_foo,mtext_foo, 32);
-						moffset_foo += 32; 
-					} 
+				if ( cm_->CmUnlink(Afoo_path.c_str() ) < 0){ 
+					return errno;
 				}
 
-				if ( cm_->CmMsync ( filep_foo + 0, 8192 , MS_SYNC) < 0){
-					cm_->CmMunmap( filep_foo,0 + 8192); 
-					return -1;
+
+				if ( cm_->CmFsync( fd_Afoo) < 0){ 
+					return errno;
 				}
-				cm_->CmMunmap( filep_foo , 0 + 8192);
 
 
 				if ( cm_->CmCheckpoint() < 0){ 
@@ -118,6 +108,11 @@ namespace fs_testing {
 
 
 				if ( cm_->CmClose ( fd_foo) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmClose ( fd_Afoo) < 0){ 
 					return errno;
 				}
 

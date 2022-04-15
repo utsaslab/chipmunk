@@ -71,41 +71,19 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmWriteData ( fd_foo, 0, 32768) < 0){ 
-					cm_->CmClose( fd_foo); 
+				if ( cm_->CmLink (foo_path.c_str() , bar_path.c_str() ) < 0){ 
 					return errno;
 				}
 
 
-				if ( fallocate( fd_foo , 0 , 32768 , 32768) < 0){ 
-					cm_->CmClose( fd_foo);
-					 return errno;
-				}
-				char *filep_foo = (char *) cm_->CmMmap(NULL, 32768 + 32768, PROT_WRITE|PROT_READ, MAP_SHARED, fd_foo, 0);
-				if (filep_foo == MAP_FAILED) {
-					 return -1;
+				if ( cm_->CmUnlink(foo_path.c_str() ) < 0){ 
+					return errno;
 				}
 
-				int moffset_foo = 0;
-				int to_writefoo = 32768 ;
-				const char *mtext_foo  = "mmmmmmmmmmklmnopqrstuvwxyz123456";
 
-				while (moffset_foo < 32768){
-					if (to_writefoo < 32){
-						memcpy(filep_foo + 32768 + moffset_foo, mtext_foo, to_writefoo);
-						moffset_foo += to_writefoo;
-					}
-					else {
-						memcpy(filep_foo + 32768 + moffset_foo,mtext_foo, 32);
-						moffset_foo += 32; 
-					} 
+				if ( cm_->CmFsync( fd_foo) < 0){ 
+					return errno;
 				}
-
-				if ( cm_->CmMsync ( filep_foo + 32768, 8192 , MS_SYNC) < 0){
-					cm_->CmMunmap( filep_foo,32768 + 32768); 
-					return -1;
-				}
-				cm_->CmMunmap( filep_foo , 32768 + 32768);
 
 
 				if ( cm_->CmCheckpoint() < 0){ 
