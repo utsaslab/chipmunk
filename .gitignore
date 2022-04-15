@@ -1,3 +1,6 @@
 *.img
 crashStatesLog
 .vscode/
+vmshare-*
+stderr
+stdout

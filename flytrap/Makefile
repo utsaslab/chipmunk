@@ -155,7 +155,7 @@ endif
 
 all: host target
 host: manager runtest repro mutate prog2c db upgrade
-target: fuzzer execprog stress executor_cc executor_ace loggers seq1_tests
+target: fuzzer execprog stress executor executor_cc executor_ace loggers seq1_tests
 executor: descriptions
 ifneq ("$(BUILDOS)", "$(NATIVEBUILDOS)")
 	$(info ************************************************************************************)
