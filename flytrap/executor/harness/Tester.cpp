@@ -45,7 +45,6 @@ int Tester::mount_fs(bool init) {
         check_data = true;
     }
     if (init) {
-        // TODO: wipe the pm device so there isn't any leftover state
         command = "dd if=/dev/zero of=" + device_path + " bs=100M > /dev/null 2>&1";
         system(command.c_str());
         if (fs == "ext4") {
@@ -245,13 +244,9 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
         if (ret != 0) {
             break;
         }
-        if (head == NULL) {
-            cout << "reached end of log" << endl;
-        }
     }
 
     oracle_diff_file.close();
-    // TODO: delete if you don't need it
     if (!error_in_oracle) {
         unlink(diff_file_path.c_str());
     }
@@ -320,6 +315,7 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
             // TODO: this will be kind of slow for large data writes that are split up into 
             // pages by the file system
             // however, we only do it once per test, so it's not a HUGE deal
+            // TODO: this is VERY slow for ext4 dax - right now we just don't do it since we don't reorder those writes anyway
             if (head != NULL && new_op->metadata->likely_data && tail->metadata->likely_data &&
                 new_op->metadata->dst == (tail->metadata->dst + tail->metadata->len)) {
                     // increase tail entry's length
@@ -377,14 +373,7 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
                 last_successful_syscall_end_mark = new_op;
             } 
         } else if (new_op->metadata->type == CHECKPOINT) {
-            if (fs_mounted)
-                log << "CHECKPOINT" << ", " << new_op->metadata->pid << endl;
             checkpoint_count++;
-            // TODO: we aren't using number of threads anymore, so this doesn't make sense.
-            // we should always just stop on the first checkpoint. we can remove a lot of 
-            // the weird stuff about counting checkpoints
-            if (checkpoint_count == num_threads) 
-                return 1;
         }
 
         if (!combined_data_write) {
@@ -399,7 +388,8 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
             }
         }
 
-        
+        if (checkpoint_count > 0) 
+            return 1;
 
         // go to the next log entry
         ioctl_val = ioctl(fd, LOGGER_NEXT_OP, NULL);
@@ -444,7 +434,7 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
         mark->next = first_syscall_mark;
     }
 
-
+    // TODO: remove this. if the tester type is syz, we should insert more crashes?
     // Insert a checkpoint mark after the last successful syscall end mark
     if (tester_type == "syz" && 
             last_successful_syscall_mark != nullptr && 
@@ -548,6 +538,7 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                     return ret;
                 }
             } else if (!reorder) {
+                log << "CHECKPOINT" << ", " << new_op->metadata->pid << endl;
                 // TODO: this isn't working because we are not actually adding a checkpoint entry 
                 // into the user space log, I think; the log just ends and this function never runs
                 // THIS NEEDS TO BE FIXED IN ORDER FOR EXT4 AND XFS TESTING TO WORK
@@ -589,7 +580,6 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                 error_in_oracle = true;
                 log << "Error finding disk mod" << endl;
                 cout << "Error finding disk mod" << endl;
-                // return mod_index;
                 return ret;
             }
             break;
@@ -602,12 +592,15 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
             //     command = "dd if=/dev/pmem0 of=/root/tmpdir/oracle.img bs=100M";
             //     system(command.c_str());
             // }
-            string check_name = test_name + "_mod" + to_string(call_index);
-            ret = check_crash_state(fd_replay, check_name, log, checkpoint, reorder, true);
             
-            if (ret < 0) {
-                cout << "check crash state < 0 in mark sys end" << endl;
-                return ret;
+            if (reorder) {
+                string check_name = test_name + "_mod" + to_string(call_index);
+                ret = check_crash_state(fd_replay, check_name, log, checkpoint, reorder, true);
+                
+                if (ret < 0) {
+                    cout << "check crash state < 0 in mark sys end" << endl;
+                    return ret;
+                }
             }
             break;
     }
@@ -628,7 +621,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
 
     // mod_index starts at -1, so this loop should handle things correctly
     // for the first syscall/disk mod
-    // TODO: to support the fuzzer, may need to add read; should add openat, ftruncate, lseek?
     // TODO: this could use refactoring
     for (unsigned int i = mod_index+1; i < mods_.size(); i++) {
         DiskMod mod = mods_[i];
@@ -676,49 +668,7 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                     goto done;
                 }
                 break;
-            // case SYS_fchmod:
-            //     if (mod.mod_type != DiskMod::kMetadataMod 
-            //                 || mod.mod_opts != DiskMod::kChmodOpt) {
-            //         break;
-            //     }
-            //     call_index++;
-            //     if (mod.return_value < 0) {
-            //         cout << "FHCMOD FAILED" << endl;
-            //         mod_index = i;
-            //         goto done;
-            //     }
-            //     // assume mod.return_value >= 0
-            //     cout << "fchmod " << mod.fd << " at " << call_index << endl;
-            //     syscall_list += "fchmod,";
-            //     ret = oracle_state.get_paths(mod.path, paths, log);
-            //     if (ret < 0) {
-            //         test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
-            //         test_info.PrintResults(log, test_name );
-            //         goto out;
-            //     }
-
-            //     fd = path_fd_map[paths.relative_path][mod.fd];
-            //     ret = fchmod(fd, mod.mode);
-            //     if (ret < 0) {
-            //         test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
-            //         test_info.PrintResults(log, test_name );
-            //         goto out;
-            //     }
-            //     ret = oracle_state.get_paths(mod.path, paths, log);
-            //     if (ret < 0) {
-            //         goto out;
-            //     }
-            //     ret = oracle_state.add_file_state(paths, true, false, false, false, log, oracle_diff_file);
-            //     if (ret < 0) {
-            //         log << "Failed getting oracle state" << endl;
-            //         test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
-            //         return ret;
-            //     }
-            //     mod_index = i;
-            //     goto done;
             case SYS_open:
-                // TODO: the only times when we care about the mode argument is when flags contain O_CREAT or O_TRUNC; 
-                // we take care of the O_CREAT case, but will the fuzzer ever give O_TRUNC?
                 if (mod.mod_type == DiskMod::kCreateMod && mod.mod_opts == DiskMod::kNoneOpt) {
                     call_index++;
                     if (mod.return_value >= 0) {
@@ -854,7 +804,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         fd = path_fd_map[paths.relative_path][mod.fd];
                         // lseek to the recorded location to ensure that we write to the 
                         // correct location in the file
-                        // TODO: this means we DON'T need to replay calls to lseek, right?
                         ret = lseek(fd, mod.file_mod_location, SEEK_SET);
                         if (ret < 0) {
                             perror("lseek");
@@ -880,7 +829,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         }
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -988,11 +936,9 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         }
                         fd = path_fd_map[paths.relative_path][mod.fd];
                         close(fd);
-                        // path_fd_map[mod.path].erase(mod.fd);
                         path_fd_map[paths.relative_path].erase(mod.fd);
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1143,7 +1089,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         }
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1212,7 +1157,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         }
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1266,7 +1210,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         }
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1308,7 +1251,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         }
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1328,7 +1270,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                             ret = oracle_state.add_file_state_from_fd(paths, true, false, fd, fd_ino_map[fd], log, oracle_diff_file);
                             if (ret < 0) {
                                 log << "Failed getting oracle state in fsync" << endl;
-                                // return ret;
                             }
                         } else {
                             ret = 0;
@@ -1358,7 +1299,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         }
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1404,7 +1344,6 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                         }
                     }
                     mod_index = i;
-                    // return 0;
                     goto done;
                 }
                 break;
@@ -1713,6 +1652,7 @@ int Tester::check_async_crash(ofstream& log) {
     return 0;
 }
 
+// TODO: this is not used and most likely does not work correctly. remove it entirely? or fix it?
 int Tester::write_stack_trace(struct write_op* op, ofstream& trace_file) {
     int ret;
     for (unsigned int i = 0; i < op->metadata->nr_entries; i++) {
@@ -1775,11 +1715,6 @@ vector<vector<struct write_op*> > Tester::handle_outstanding_writes(ofstream& lo
     }
 
     vector<struct write_op*> current;
-    
-    // TODO: let user set the threshold at which they don't check subsets
-    // at each iteration, get all combos n choose k
-    // unsigned int max_k = 2; 
-    // unsigned int max_k = op_vec.size();
 
     unsigned int subset_size;
     if (max_k < 0 || op_vec.size() < max_k) {
@@ -1989,7 +1924,6 @@ int Tester::flush_entries(int fd_replay, struct write_op* sfence_op, ofstream& t
             if (make_trace && fs_mounted) {
                 ret = write_stack_trace(current, trace_file);
                 if (ret < 0) {
-                    // fclose(base_fptr);
                     close(fd_base);
                     return ret;
                     // free stuff??
@@ -2030,7 +1964,6 @@ int Tester::play_undo_log(int fd_replay, ofstream& log) {
         return fd_ioctl;
     }
 
-    // fd_base = open("code/replay/base_replay.img", O_RDWR);
     fd_base = open(base_replay_path.c_str(), O_RDWR);
     if (fd_base < 0) {
         perror("open 8");
@@ -2102,7 +2035,6 @@ int Tester::play_undo_log(int fd_replay, ofstream& log) {
     }
     undo_log.clear();
     fsync(fd_replay);
-    // fclose(base_fptr);
     close(fd_base);
     close(fd_ioctl);
 
@@ -2240,59 +2172,6 @@ bool Tester::check_fs_contents2(int checkpoint, ofstream& diff_file, ofstream& l
 
     diff_file << syscall_list << endl;
 
-    // if (mod.mod_type == DiskMod::kOpenMod) {
-    //     diff_file << "open()" << endl;
-    // } else if (mod.mod_type == DiskMod::kLseekMod) {
-    //     diff_file << "lseek()" << endl;
-    // } else if (mod.mod_type == DiskMod::kCloseMod) {
-    //     diff_file << "close()" << endl;
-    // } else if (mod.mod_type == DiskMod::kCreateMod) {
-    //     if (mod.directory_mod) {
-    //         diff_file << "mkdir()" << endl;
-    //     } else {
-    //         diff_file << "creating file" << endl;
-    //     }
-    // } else if ((mod.mod_type == DiskMod::kDataMod || mod.mod_type == DiskMod::kDataMetadataMod) 
-    //             && (mod.mod_opts == DiskMod::kWriteOpt || mod.mod_opts == DiskMod::kPwriteOpt)) {
-    //     if (mod.mod_opts == DiskMod::kWriteOpt) {
-    //         diff_file << "write()" << endl;
-    //     } else {
-    //         diff_file << "pwrite()" << endl;
-    //     }
-    // } else if (mod.mod_type == DiskMod::kRenameMod) {
-    //     diff_file << "rename" << endl;
-    // } else if (mod.mod_type == DiskMod::kRemoveMod) {
-    //     if (mod.directory_mod) {
-    //         diff_file << "rmdir()" << endl;
-    //     } else {
-    //         diff_file << "unlink()" << endl;
-    //     }
-    // } else if (mod.mod_type == DiskMod::kLinkMod) {
-    //     if (mod.mod_opts != DiskMod::kSymlinkOpt) {
-    //         diff_file << "link()" << endl;
-    //     } else {
-    //         diff_file << "symlink()" << endl;
-    //     }
-    // } else if ((mod.mod_type == DiskMod::kDataMod || 
-    //         mod.mod_type == DiskMod::kDataMetadataMod) && 
-    //         (mod.mod_opts == DiskMod::kFallocateOpt || 
-    //         mod.mod_opts == DiskMod::kPunchHoleKeepSizeOpt ||
-    //         mod.mod_opts == DiskMod::kCollapseRangeOpt ||
-    //         mod.mod_opts == DiskMod::kZeroRangeKeepSizeOpt ||
-    //         mod.mod_opts == DiskMod::kZeroRangeOpt ||
-    //         mod.mod_opts == DiskMod::kFallocateKeepSizeOpt)) {
-    //     diff_file << "fallocate()" << endl;
-    // } else if (mod.mod_type == DiskMod::kDataMetadataMod && mod.mod_opts == DiskMod::kTruncateOpt) {
-    //     diff_file << "truncate()" << endl;
-    // } else if (mod.mod_type == DiskMod::kDataMetadataMod && mod.mod_opts == DiskMod::kTruncateOpenOpt) {
-    //     diff_file << "open truncate" << endl;
-    // } else if (mod.mod_type == DiskMod::kReadMod) {
-    //     diff_file << "read" << endl;
-    // } else {
-    //     diff_file << "unknown system call, mod type " << mod.mod_type << ", mod opts " << mod.mod_opts << endl;
-    // }
-
-
     // if we are looking at the mod corresponding to the current operation
     if (mod.return_value >= 0) {
         if (mod.mod_type == DiskMod::kReadMod) {
@@ -2350,10 +2229,8 @@ bool Tester::check_fs_contents2(int checkpoint, ofstream& diff_file, ofstream& l
         else if (mod.mod_type == DiskMod::kFsyncMod) {
             // TODO: have to be careful here; looks like NOVA doesn't return an error
             // if you try to fsync a file that doesn't exist.
-            // cout << "FSYNC" << endl;
         }
         else if (mod.mod_type == DiskMod::kSyncMod) {
-            // cout << "SYNC" << endl;
         }
         else if (mod.mod_type == DiskMod::kRemoveMod) {
             ret = oracle_state.check_remove(path, diff_file, log, syscall_finished);

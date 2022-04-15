@@ -90,6 +90,7 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
             new_op->metadata->dst = (unsigned long long)pmem_addr;
             new_op->metadata->src = (unsigned long long)(mem + off);
             new_op->metadata->type = NT;
+            new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
 
             // allocate space for the data
             new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
@@ -252,6 +253,7 @@ static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *r
         new_op->metadata->src = (unsigned long long)(virt_to_phys((void*)regs->di));
         new_op->metadata->dst = (unsigned long long)(virt_to_phys((void*)regs->di));
         new_op->metadata->type = CLWB;
+        new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
 
 
         // allocate space for the data
@@ -333,6 +335,7 @@ static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *
 
         new_op->metadata->len = regs->cx;
         new_op->metadata->dst = regs->dx; 
+        new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
 
 
         // allocate space for the data
@@ -739,6 +742,61 @@ static int insert_checkpoint(void) {
     // return SUCCESS;
 }
 
+// TODO: do we actually need this here? ext4/xfs testing probably doesn't actually need this info
+static int insert_mark_sys(unsigned int sys, int end, long ret) {
+    struct write_op* new_op;
+
+    if (Log.logging_on) {
+        new_op = kzalloc(sizeof(struct write_op), GFP_KERNEL);
+        if (new_op == NULL) {
+            printk(KERN_ALERT "logger: could not allocate space for log entry\n");
+            goto out;
+        }
+        new_op->next = NULL;
+        new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_KERNEL);
+
+        if (new_op->metadata == NULL) {
+            printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
+            kfree(new_op);
+            goto out;
+        }
+
+        // no data is logged here 
+        // just need to take note that the FS has been mounted
+        new_op->metadata->dst = 0;
+        new_op->metadata->src = 0;
+        new_op->metadata->len = 0;
+        new_op->metadata->type = (end > 0) ? MARK_SYS_END : MARK_SYS;
+	if (!end)
+		new_op->metadata->sys = sys;
+	if (end)
+		new_op->metadata->sys_ret = ret;
+        new_op->metadata->pid = current->pid;
+
+        spin_lock(&kprobe_lock);
+        if (Log.tail != NULL) {
+            Log.tail->next = new_op;
+            Log.tail = new_op;
+        }
+        else {
+            Log.tail = new_op;
+        }
+        if (Log.head == NULL) {
+            Log.head = new_op;
+            if (Log.head == NULL) {
+            }
+        }
+        spin_unlock(&kprobe_lock);
+    }
+
+    return SUCCESS;
+
+    out:
+        printk(KERN_ALERT "logger: there was an error trying to append to the write log\n");
+        printk(KERN_INFO "logger: failed to record checkpoint in log\n");
+        return FAIL;
+}
+
 static int logger_ioctl(struct block_device* bdev, fmode_t mode, unsigned int cmd, unsigned long arg) {
     int ret = 0;
     unsigned int failed = 0;
@@ -848,6 +906,12 @@ static int logger_ioctl(struct block_device* bdev, fmode_t mode, unsigned int cm
             return failed;
         case LOGGER_MARK:
             ret = insert_mount_mark();
+            break;
+        case LOGGER_MARK_SYS:
+            ret = insert_mark_sys(arg, 0, 1);
+            break;
+        case LOGGER_MARK_SYS_END:
+            ret = insert_mark_sys(0, 1, (long) arg);
             break;
     }
     return ret;
