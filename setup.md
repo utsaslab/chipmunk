@@ -17,11 +17,7 @@ If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' a
 
 ## 3. Setting up VMs
 1. `cd` to `flytrap/syzkaller/tools/` and run the `create-image.sh` script. This will create a VM image called stretch.img and a public and private key for ssh-ing into the VMs. These can be moved out of the `tools/` directory; their locations will be specified in a configuration file later.
-2. Boot the VM with the 5.1.0+ kernel and emulated PM. The suggested command for booting it is:
-    ```
-    set +H; sudo qemu-system-x86_64 -boot c -m 4096 -hda <path to stretch.img> -enable-kvm -nographic -kernel <path to flytrap/vmshare>/linux-5.1/arch/x86/boot/bzImage -append "root=/dev/sda console=ttyS0 earlyprintk=serial memmap=128M!4G memmap=128M!4224M" -fsdev local,security_model=passthrough,id=fsdev0,path=<absolute path to flytrap/vmshare> -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshare -smp 1 -net nic -net user,hostfwd=tcp::2222-:22 -cpu host
-    ```
-    The VM is set up for passwordless root access; log in with username `root`. It should not ask for a password.
+2. Boot the VM with the 5.1.0+ kernel and emulated PM. A script that boots the VM with the suggested arguments is provided at `boot-vm.sh`. The VM is set up for passwordless root access; log in with username `root`. It should not ask for a password.
 3. To confirm that the emulated PM is working correctly, check that `/dev/` contains `pmem0` and `pmem1` devices. 
 4. In the VM, create directories `~/tmpdir`, `/mnt/pmem`, and `/mnt/pmem_replay`. FlyTrap expects these directories in these exact locations, so don't rename or move them. 
 5. Add the line `mount -t 9p -o trans=virtio,version=9p2000.L hostshare /root/tmpdir` to `~/.profile` in the VM. This mounts a shared directory between the host and guest. Source the .profile file and `ls ~/tmpdir` to confirm that this works; you should see the kernel source directory there. 
@@ -30,7 +26,7 @@ If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' a
 ## 4. Building and running FlyTrap with Syzkaller
 1. `cd` to `flytrap/` and run `make`.
 2. Create a directory `workdir` in `flytrap`.
-3. Edit the config file so that:
+3. Create a copy of `config.template` named `config` and edit it so that:
 
     - "workdir" is set to the absolute path to `flytrap/syzkaller/workdir`
     - "kernel_obj" is set to the absolute path to `flytrap/vmshare/linux-5.1`
@@ -39,6 +35,7 @@ If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' a
     - "syzkaller" is set to the absolute path to `flytrap/syzkaller`
     - "filesystem" and "logger" are set to reflect the correct file system
     - "tester_dir" is set to the absolute path to `flytrap/`
+    - "filesystem" and "logger" reflect the file system you would like to test
     - in the VM options, "kernel" is set to the absolute path to the bzImage for the kernel and "share_dir" is set to the absolute path to `flytrap/vmshare`. You can also update the number of VMs for Syzkaller to spawn and the amount of memory and number of CPUs to allocate for each VM here.
 4. Run `sudo ./bin/syz-manager -config config`. To run in debug mode with extra output, add `-debug`. This generates a significant amount of output, so you should redirect the output to files.
 5. As FlyTrap runs, it will create a set of directories with names like `vmshare-#` (one for each VM) and store output from that VM's fuzzing instance there. It also stores some data in `flytrap/syzkaller/workdir`.
@@ -54,4 +51,6 @@ If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' a
 1. `cd` to `flytrap/` and run `make`.
 2. `cd` to `flytrap/executor/ace`. Run `python3 ace.py -l <seq length> -n false -d false -t <fs type>` to generate tests. The sequence length option can be 1, 2, or 3. The test type options supported by FlyTrap are `pm` and `crashmonkey`. The default option is `crashmonkey`; these tests are placed in `flytrap/executor/tests/dax_seq#` and should be used only with EXT4-DAX or XFS-DAX. To test NOVA, PMFS, WineFS, or other PM-specific file systems, use the `pm` option. These tests are placed in `flytrap/executor/tests/seq#`.
 3. Compile tests by running `make <test dir>_tests` where `<test dir>` is the location of the test you'd like to build. For example, compiling seq2 tests generated using `pm` mode would be `make seq2_tests`. Seq1 `pm` tests are compiled along with FlyTrap and don't need to be compiled with a specific command.
-**TODO: finish**
+4. Run `cp -r bin/* flytrap/vmshare/syzkallerBinaries` to copy the testing infrastructure and compiled tests to a directory that is shared with the VM.
+5. Boot the VM and run `cd tmpdir/syzkallerBinaries`.
+6. To run an individual ACE test, use the command `./ace-executor_cc -v -f <fs type> tests/seq1/j-lang1.so`, replacing `seq1/j-lang1.so` with the relative path to the test you want to run. If the FS type is not provided, the tester defaults to NOVA. There are additional arguments for providing information like the size and location of PM devices if they are not the defaults set by the `boot-vm.sh` script.
