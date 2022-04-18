@@ -55,7 +55,6 @@ int Tester::mount_fs(bool init) {
                 perror("mkfs.ext4");
                 return ret;
             }
-            opts = "dax=always";
             ret = mount(device_path.c_str(), device_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
         }
         else {
@@ -76,6 +75,7 @@ int Tester::mount_fs(bool init) {
 
 int Tester::mount_replay() {
     int ret;
+    cout << "mounting replay" << endl;
     ret = mount(replay_device_path.c_str(), replay_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
     if (ret != 0) {
         return ret;
@@ -1633,10 +1633,21 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
     }
     close(fd_ioctl);
 
-    // clear dmesg logs so we can look at them for errors without scanning the 
-    // entire thing from boot and past tests
-    command = "dmesg -C";
-    system(command.c_str());
+    // // clear dmesg logs so we can look at them for errors without scanning the 
+    // // entire thing from boot and past tests
+    // command = "dmesg -C";
+    // system(command.c_str());
+
+    ret = mount_replay();
+    if (ret != 0) {
+        // if it fails to mount here, that's an error!
+        perror("mount");
+        diff_file << "File system is unmountable" << endl;
+        test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
+        test_info.PrintResults(log, test_name );
+        diff_file.close();
+        return false;
+    }
 
     // now iterate over the mods and perform checks
     // checks on sync file systems use an index variable to keep track of 
@@ -1654,7 +1665,12 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
                 goto async_out;
             }
         } else if (mod.mod_type == DiskMod::kSyncMod) {
-            log << "sync mod" << endl;
+            // compare the entire disk
+            ret = oracle_state.check_disk_contents(replay_mount_point, replay_device_path, diff_file, log);
+            if (!ret) {
+                passed = false;
+                goto async_out;
+            }
         } else if (mod.mod_type == DiskMod::kDataMod || 
             mod.mod_type == DiskMod::kSyncFileRangeMod) {
             log << "data mod or sync file range mod" << endl;
@@ -1671,6 +1687,18 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
     if (!ret) {
         passed = false;
         goto async_out;
+    }
+
+    ret = umount(replay_mount_point.c_str());
+    if (ret != 0) {
+        // if it fails, sleep for a second to give it time to finish up, then try again
+        sleep(2);
+        ret = umount(replay_mount_point.c_str());
+        if (ret != 0) {
+            perror("unmount");
+            diff_file.close();
+            return false;
+        }
     }
 
     elapsed = duration_cast<milliseconds>(steady_clock::now() - check_state);

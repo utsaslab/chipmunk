@@ -134,7 +134,6 @@ int DiskState::add_file_state(struct paths paths, bool creat, bool del, bool fsy
             parent_relative_path = paths.relative_path.substr(0, found);
             parent_path = mount_point + "/" + parent_relative_path;
         }
-        // string parent_path = mount_point + "/" + parent_relative_path;
 
         // in certain cases with symlink loops, the parent may not exist after the symlink is deleted.
         // in this case, we should walk up the path until we find an ancestor that does exist.
@@ -149,7 +148,6 @@ int DiskState::add_file_state(struct paths paths, bool creat, bool del, bool fsy
             }
         }
 
-        // cout << "adding " << parent_path << " state as a parent " << endl;
         // if the parent exists, add state for it. if not, we're probably deleting a whole 
         // directory tree and have already handled the parent
         if (contents.find(parent_relative_path) != contents.end()) {
@@ -983,4 +981,80 @@ bool DiskState::check_file(string path, set<string> skip_files, set<string> link
     return true;
 }
 
+bool DiskState::check_disk_contents(string crash_mount_path, string crash_dev_path, ofstream& diff_file, ofstream& log) {
+    int ret;
+    // check the entire disk
+    // walk through the crash state and grab the state of each file that is present
+    // then compare against the most recent oracle file states
+    DiskState crash_state(crash_dev_path, crash_mount_path, "");
+    ret = crash_state.get_crash_disk_contents(crash_mount_path, diff_file, log);
+    if (ret < 0) {
+        return false;
+    }
+
+    return true;
 }
+
+// should only be called on crash state
+int DiskState::get_crash_disk_contents(string path, ofstream& diff_file, ofstream& log) {
+    DIR *directory;
+    struct dirent *dir_entry;
+    struct stat statbuf;
+    int ret;
+
+    directory = opendir(path.c_str());
+    if (directory == NULL) {
+        return 0;
+    }
+    dir_entry = readdir(directory);
+    if (dir_entry == NULL) {
+        closedir(directory);
+        return 0;
+    }
+    do {
+        // this is pretty much taken verbatim from crashmonkey with adjustments
+        // for our file state management
+        string parent_path(path);
+        string filename(dir_entry->d_name);
+        string current_path = parent_path + "/" + filename;
+        string relative_path = current_path;
+        relative_path.erase(0, mount_point.length());
+
+        ret = lstat(current_path.c_str(), &statbuf);
+        if (ret < 0) {
+            continue;
+        }
+
+        if (S_ISDIR(statbuf.st_mode)) {
+            
+            if ((strcmp(dir_entry->d_name, ".") == 0) || (strcmp(dir_entry->d_name, "..") == 0) ||
+                (strcmp(dir_entry->d_name, "lost+found") == 0)) {
+                continue;
+            }
+            struct paths paths = {current_path, relative_path};
+            ret = add_file_state(paths, false, false, false, false, log, diff_file);
+            if (ret < 0) {
+                log << "failed getting oracle state" << endl;
+                return ret;
+            }
+            ret = get_crash_disk_contents(current_path, diff_file, log);
+            if (ret < 0) {
+                return ret;
+            }
+        } else {
+            struct paths paths = {current_path, relative_path};
+            ret = add_file_state(paths, false, false, false, false, log, diff_file);
+            if (ret < 0) {
+                log << "failed getting oracle state" << endl;
+                return ret;
+            }
+        }
+    } while ((dir_entry = readdir(directory)));
+    
+
+    closedir(directory);
+    return 0;
+}
+
+
+} // namespace fs_testing
