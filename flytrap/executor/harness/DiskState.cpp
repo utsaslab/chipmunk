@@ -983,13 +983,56 @@ bool DiskState::check_file(string path, set<string> skip_files, set<string> link
 
 bool DiskState::check_disk_contents(string crash_mount_path, string crash_dev_path, ofstream& diff_file, ofstream& log) {
     int ret;
-    // check the entire disk
+    bool match;
     // walk through the crash state and grab the state of each file that is present
-    // then compare against the most recent oracle file states
     DiskState crash_state(crash_dev_path, crash_mount_path, "");
+    struct paths root_path = {crash_mount_path, ""};
+
+    // add state for the root 
+    ret = crash_state.add_file_state(root_path, false, false, false, false, log, diff_file);
+    if (ret < 0) {
+        return false;
+    }
+    
+    // then for the rest of the crash state contents
     ret = crash_state.get_crash_disk_contents(crash_mount_path, diff_file, log);
     if (ret < 0) {
         return false;
+    }
+
+    // compare the crash state against the oracle state (self)
+    // iterate over the oracle state, since it should contain a superset of the files in 
+    // the crash state as it contains records for ALL files that have existed at any point
+    map<string, vector<FileState*>>::iterator it;
+    for (it = contents.begin(); it != contents.end(); it++) {
+        // remember: string keys in the map are relative paths
+        string relative_path = it->first;
+        cout << relative_path << endl;
+        FileState* oracle_file_state = it->second.back();
+        FileState* crash_file_state;
+        cout << "oracle file state present: " << oracle_file_state->present << endl;
+
+        if (oracle_file_state->present) {
+            if (crash_state.contents.count(relative_path) == 0) {
+                diff_file << mount_point + "/" + relative_path << " is present in the oracle but not in the crash state" << endl;
+                return false;
+            } 
+            crash_file_state = crash_state.contents[relative_path].back();
+            match = oracle_file_state->compare(crash_file_state, diff_file);
+            if (!match) {
+                return false;
+            }
+        }
+    }
+
+    // sanity check to make sure the crash state doesn't contain any files 
+    // that the oracle doesn't have
+    for (it = crash_state.contents.begin(); it != crash_state.contents.end(); it++) {
+        string relative_path = it->first;
+        if (contents.count(relative_path) == 0 || !contents[relative_path].back()->present) {
+            diff_file << mount_point + "/" + relative_path << " is present in the crash state but not in the oracle" << endl;
+            return false;
+        }
     }
 
     return true;
@@ -1018,7 +1061,7 @@ int DiskState::get_crash_disk_contents(string path, ofstream& diff_file, ofstrea
         string filename(dir_entry->d_name);
         string current_path = parent_path + "/" + filename;
         string relative_path = current_path;
-        relative_path.erase(0, mount_point.length());
+        relative_path.erase(0, mount_point.length()+1);
 
         ret = lstat(current_path.c_str(), &statbuf);
         if (ret < 0) {

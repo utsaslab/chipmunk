@@ -242,6 +242,7 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
     while (head != NULL) {
         ret = process_log_entry(fd_replay, fd, checkpoint, checkpoint_count, log, test_name, trace_file, make_trace, reorder, oracle_diff_file);
         if (ret != 0) {
+            error_in_oracle = true;
             break;
         }
     }
@@ -1601,6 +1602,7 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
 
     ofstream diff_file;
     string diff_name = diff_path + "diff-" + test_name;
+    cout << "diff name: " << diff_name << endl;
     diff_file.open(diff_name, std::fstream::out | std::fstream::app);
 
     // make sure the log is empty, turn off logging.
@@ -1668,6 +1670,7 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
             // compare the entire disk
             ret = oracle_state.check_disk_contents(replay_mount_point, replay_device_path, diff_file, log);
             if (!ret) {
+                cout << "TEST DID NOT PASS" << endl;
                 passed = false;
                 goto async_out;
             }
@@ -1708,6 +1711,7 @@ async_out:
     diff_file.close();
 
     if (passed) {
+        cout << "passed, removing diff file" << endl;
         ret = remove(diff_name.c_str());
         if (ret < 0) {
             return ret;
