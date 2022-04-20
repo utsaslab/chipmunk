@@ -1602,7 +1602,6 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
 
     ofstream diff_file;
     string diff_name = diff_path + "diff-" + test_name;
-    cout << "diff name: " << diff_name << endl;
     diff_file.open(diff_name, std::fstream::out | std::fstream::app);
 
     // make sure the log is empty, turn off logging.
@@ -1670,13 +1669,13 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
             // compare the entire disk
             ret = oracle_state.check_disk_contents(replay_mount_point, replay_device_path, diff_file, log);
             if (!ret) {
-                cout << "TEST DID NOT PASS" << endl;
                 passed = false;
                 goto async_out;
             }
         } else if (mod.mod_type == DiskMod::kDataMod || 
             mod.mod_type == DiskMod::kSyncFileRangeMod) {
             log << "data mod or sync file range mod" << endl;
+            // we only compare specific file contents here?
         }
     }
 

@@ -499,7 +499,12 @@ bool DiskState::check_generic(string path, ofstream& diff_file, ofstream& log, b
     FileState crash_file_state, *oracle_file_state_new, *oracle_file_state_old;
     path = fix_filepath(path);
     // construct path to the file in the crash state
-    string relpath = path.substr(mount_point.size() + 1, string::npos);
+    string relpath;
+    if (path.compare(mount_point) == 0) {
+        relpath = "";
+    } else {
+        relpath = path.substr(mount_point.size() + 1, string::npos);
+    }
     string crash_path = replay_mount_point + "/" + relpath;
 
     int num_oracle_states = contents[relpath].size();
@@ -528,7 +533,6 @@ bool DiskState::check_generic(string path, ofstream& diff_file, ofstream& log, b
     // the crash state should exactly match either the old or new oracle state
     bool states_match_old = oracle_file_state_old->compare(&crash_file_state, diff_file);
     bool states_match_new = oracle_file_state_new->compare(&crash_file_state, diff_file);
-
     // if the syscall is finished, then we must match the new state
     if (syscall_finished && !states_match_new) {
         diff_file << "Operation completed, but " << crash_path << " does not match oracle" << endl;

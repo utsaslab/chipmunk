@@ -211,6 +211,7 @@ int AceTester::test_run(const int change_fd, const int checkpoint,  std::ofstrea
 //   return SUCCESS;
 // }
 
+// TODO: remove these, they don't do anything
 bool AceTester::test_replay(ofstream& log, int checkpoint, string test_name, bool make_trace, bool reorder) {
     int ret = true;
     // ofstream file;
