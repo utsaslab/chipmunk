@@ -60,6 +60,8 @@ public:
 
     bool check_disk_contents(std::string crash_mount_path, std::string crash_dev_path, std::ofstream& diff_file, std::ofstream& log);
     int get_crash_disk_contents(std::string path, std::ofstream& diff_file, std::ofstream& log);
+    bool check_file_contents_range(std::string path, int offset, int length, std::ofstream& diff_file, std::ofstream& log);
+
 };
 
 }

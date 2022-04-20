@@ -867,23 +867,6 @@ bool DiskState::check_files(utils::DiskMod mod, map<string, map<int, int> > path
         linked_files.insert(*it);
     }
 
-    // cout << "skip files " << endl;
-    // for (set<string>::iterator it = skip_files.begin(); it != skip_files.end(); it++) {
-    //     cout << *it << endl;
-    // }
-
-    // cout << "linked files to " << mod.path << endl;
-    // for (set<string>::iterator it = linked_files1.begin(); it != linked_files1.end(); it++) {
-    //     cout << *it << endl;
-    // }
-
-    // if (mod.mod_type == utils::DiskMod::kRenameMod) {
-    //     cout << "linked files to " << mod.new_path << endl;
-    //     for (set<string>::iterator it = new_linked_files.begin(); it != new_linked_files.end(); it++) {
-    //         cout << *it << endl;
-    //     }
-    // }
-
     // ok now go through the whole file tree and make sure everything looks right 
     // for all files that are NOT in the skip list
     return check_file("", skip_files, linked_files, diff_file, log);
@@ -897,7 +880,6 @@ bool DiskState::check_file(string path, set<string> skip_files, set<string> link
     if (path[0] == '/') {
         path = path.substr(1, string::npos);
     }
-    // cout << "checking " << path << endl;
 
     if (linked_files.find(path) != linked_files.end()) {
         // skip files that are linked to the current file
@@ -949,39 +931,6 @@ bool DiskState::check_file(string path, set<string> skip_files, set<string> link
             }
         } 
     }
-    // cout << replay_mount_point + "/" + path << " is not in skip files" << endl;
-
-    // // this should always be true, but just in case
-    // if (oracle_state->present) {
-    //     string full_path = mount_point + "/" + path;
-
-    //     // if this file is a directory, traverse all of its entries
-    //     // if we find an error, return false immediately
-    //     if (S_ISDIR(oracle_state->statbuf.st_mode)) {
-    //         DIR* directory = opendir(full_path.c_str());
-    //         if (directory == NULL) {
-    //             cout << "could not open directory " << full_path << endl;
-    //             diff_file << "could not open directory " << full_path << endl;
-    //             return false;
-    //         }
-
-    //         struct dirent* dir_entry;
-    //         while (dir_entry = readdir(directory)) {
-    //             if ((strcmp(dir_entry->d_name, ".") == 0) ||
-    //                 (strcmp(dir_entry->d_name, "..") == 0)) {
-    //                 continue;
-    //             }
-
-    //             string subpath = path + "/" + string(dir_entry->d_name);
-    //             ret = check_file(subpath, skip_files, linked_files, diff_file, log);
-    //             if (!ret) {
-    //                 closedir(directory);
-    //                 return false;
-    //             }
-    //         }
-    //         closedir(directory);
-    //     }
-    // } 
     return true;
 }
 
@@ -1011,10 +960,8 @@ bool DiskState::check_disk_contents(string crash_mount_path, string crash_dev_pa
     for (it = contents.begin(); it != contents.end(); it++) {
         // remember: string keys in the map are relative paths
         string relative_path = it->first;
-        cout << relative_path << endl;
         FileState* oracle_file_state = it->second.back();
         FileState* crash_file_state;
-        cout << "oracle file state present: " << oracle_file_state->present << endl;
 
         if (oracle_file_state->present) {
             if (crash_state.contents.count(relative_path) == 0) {
@@ -1101,6 +1048,51 @@ int DiskState::get_crash_disk_contents(string path, ofstream& diff_file, ofstrea
 
     closedir(directory);
     return 0;
+}
+
+bool DiskState::check_file_contents_range(string path, int offset, int length, ofstream& diff_file, ofstream& log) {
+    int ret;
+    struct stat statbuf;
+    FileState crash_state, *oracle_state;
+    string relpath;
+    path = fix_filepath(path);
+    // construct path to the file in the crash state
+    if (path.compare(mount_point) == 0) {
+        relpath = "";
+    } else {
+        relpath = path.substr(mount_point.size() + 1, string::npos);
+    }
+    string crash_path = replay_mount_point + "/" + relpath;
+
+    // check that the file is still present in the oracle
+    // it may have been deleted prior to the fsync/sync/datasync
+    oracle_state = contents[relpath].back();
+    if (!oracle_state->present) {
+        // make sure that the file is not present in the crash state either
+        ret = lstat(crash_path.c_str(), &statbuf);
+        if (ret == 0) {
+            diff_file << crash_path << "exists in the crash state, but " << path << " does not exist in the oracle" << endl;
+            return false;
+        }
+        return true;
+    }
+
+
+    ret = crash_state.init_crash_file_state(crash_path, diff_file);
+    if (ret < 0) {
+        log << "failed getting crash state" << endl;
+        return false;
+    }
+
+    
+
+    
+
+    if (!oracle_state->compare_at_offset(&crash_state, offset, length, diff_file)) {
+        return false;
+    }
+
+    return true;
 }
 
 

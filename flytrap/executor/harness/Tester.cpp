@@ -75,7 +75,6 @@ int Tester::mount_fs(bool init) {
 
 int Tester::mount_replay() {
     int ret;
-    cout << "mounting replay" << endl;
     ret = mount(replay_device_path.c_str(), replay_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
     if (ret != 0) {
         return ret;
@@ -1604,6 +1603,8 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
     string diff_name = diff_path + "diff-" + test_name;
     diff_file.open(diff_name, std::fstream::out | std::fstream::app);
 
+    cout << "running test " << test_name << endl;
+
     // make sure the log is empty, turn off logging.
     // we don't need undo logging here.
     // TODO: make a separate function for turning off and clearing the log
@@ -1674,8 +1675,11 @@ int Tester::check_async_crash(string test_name, ofstream& log) {
             }
         } else if (mod.mod_type == DiskMod::kDataMod || 
             mod.mod_type == DiskMod::kSyncFileRangeMod) {
-            log << "data mod or sync file range mod" << endl;
-            // we only compare specific file contents here?
+            ret = oracle_state.check_file_contents_range(path, mod.file_mod_location, mod.file_mod_len, diff_file, log);
+            if (!ret) {
+                passed = false;
+                goto async_out;
+            }
         }
     }
 

@@ -43,6 +43,7 @@ public:
     friend std::ofstream& operator<< (std::ofstream& os, const FileState& f);
 
     bool compare(FileState* compare_state, std::ofstream& diff_file);
+    bool compare_at_offset(FileState* compare_state, int offset, int len, std::ofstream& diff_file);
 
     
 private:
