@@ -56,8 +56,15 @@ int Tester::mount_fs(bool init) {
                 return ret;
             }
             ret = mount(device_path.c_str(), device_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
-        }
-        else {
+        } else if (fs == "xfs") {
+            command = "mkfs.xfs -m reflink=0 " + device_path + " < /dev/null 2>&1";
+            ret = system(command.c_str());
+            if (ret < 0) {
+                perror("mkfs.xfs");
+                return ret;
+            }
+            ret = mount(device_path.c_str(), device_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
+        } else {
             opts = ",init" + opts;
             ret = mount(device_path.c_str(), device_mount_point.c_str(), fs.c_str(), 0, opts.c_str());
         }

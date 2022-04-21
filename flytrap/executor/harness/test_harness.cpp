@@ -203,9 +203,13 @@ int main(int argc, char* argv[]) {
     } else {
         fs_type = fs;
     }
-    command = "rmmod logger_" + fs_type;
+    if (fs != "xfs") {
+        command = "rmmod logger_" + fs_type;
+    } else {
+        command = "rmmod logger_ext4";
+    }
     system(command.c_str());
-    if (fs != "ext4") {
+    if (fs != "ext4" && fs != "xfs") {
         command = "rmmod " + fs_type + " -f";
         system(command.c_str());
         // TODO: don't rely on hardcoded absolute paths
@@ -216,7 +220,12 @@ int main(int argc, char* argv[]) {
             return r;
         }
     }
-    command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-" + fs_type + ".ko";
+    if (fs != "xfs") {
+        command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-" + fs_type + ".ko";
+    } else {
+        // XFS uses the ext4 logger
+        command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-ext4.ko";
+    }
     r = system(command.c_str());
 	if (r < 0) {
 		cout << "failed to load logger module" << endl;
@@ -250,13 +259,13 @@ int main(int argc, char* argv[]) {
     // if we are testing ext4-dax, need to provide the -o dax mount option
     // TODO: what happens if the user provides the -o dax option (or a version of it)?
     // should probably check to see if they provided it
-    if (fs == "ext4") {
+    if (fs == "ext4" || fs == "xfs") {
         mount_opts += ",dax";
         // right now, we will just use ACE tests to test ext4 dax. syzkaller doesn't have 
         // the proper fsync/sync/fdatasync usage built in
         if (testerType == "syz") {
-            cout << "syzkaller tester does not currently support EXT4-DAX" << endl;
-            logfile << "syzkaller tester does not currently support EXT4-DAX" << endl;
+            cout << "syzkaller tester does not currently support EXT4-DAX or XFS-DAX" << endl;
+            logfile << "syzkaller tester does not currently support EXT4-DAX or XFS-DAX" << endl;
             logfile.close();
             return -1;
         }
