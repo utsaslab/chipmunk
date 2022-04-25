@@ -57,7 +57,7 @@ int Tester::mount_fs(bool init) {
             }
             ret = mount(device_path.c_str(), device_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
         } else if (fs == "xfs") {
-            command = "mkfs.xfs -m reflink=0 " + device_path + " < /dev/null 2>&1";
+            command = "mkfs.xfs -m reflink=0 " + device_path + " > /dev/null 2>&1";
             ret = system(command.c_str());
             if (ret < 0) {
                 perror("mkfs.xfs");
