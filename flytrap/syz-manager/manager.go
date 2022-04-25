@@ -656,9 +656,11 @@ func (mgr *Manager) runInstanceInner(index int, instanceName string) (*report.Re
 			return nil, fmt.Errorf("failed to copy logger object file: %v", err)
 		}
 
-		_, err = inst.Copy(mgr.cfg.FileSystemPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to copy fs object file: %v", err)
+		if mgr.cfg.FileSystem != "ext4" && mgr.cfg.FileSystem != "xfs" {
+			_, err = inst.Copy(mgr.cfg.FileSystemPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to copy fs object file: %v", err)
+			}
 		}
 	}
 

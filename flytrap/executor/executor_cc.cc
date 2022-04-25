@@ -508,36 +508,42 @@ int main(int argc, char** argv)
 	os_init(argc, argv, (char*)SYZ_DATA_OFFSET, SYZ_NUM_PAGES * SYZ_PAGE_SIZE);
 	current_thread = &threads[0];
 
-	if (loadModule) {
-		// int r = system((std::string("modprobe ") + FS).c_str());
-		int r = system(std::string("insmod " + fs_module).c_str());
-		// int r = system(std::string("insmod /root/tmpdir/linux-5.1/fs/nova/nova.ko").c_str());
-		if (r < 0) {
-			debug("Failed to load module\n");
-		}
-	}
-
-	std::string command = "dd if=/dev/zero of=/dev/pmem1 bs=100M > /dev/null 2>&1";
-	system(command.c_str());
-
 	// TODO: unmount the file systems if they are still mounted from a past run
 	// it's fine if these fail; the systems may not be mounted
 	umount("/dev/pmem0");
 	umount("/dev/pmem1");
 
+	// // TODO: automatically set loadmodule properly if we are using ext4 or xfs
+	// // TODO: this isn't necessary, is it? we load it again shortly
+	// if (loadModule && FS.compare("ext4") != 0 && FS.compare("xfs") != 0) {
+	// 	cout << "reloading fs module 3" << endl;
+	// 	int r = system(std::string("insmod " + fs_module).c_str());
+	// 	if (r < 0) {
+	// 		debug("Failed to load module\n");
+	// 	}
+	// }
+
+	std::string command = "dd if=/dev/zero of=/dev/pmem1 bs=100M > /dev/null 2>&1";
+	system(command.c_str());
+
 	// clean up leftover state
 	// these will fail if nothing is loaded, but that's fine
 	int r = system((std::string("rmmod ") + logger).c_str());
-	r = system((std::string("rmmod ") + FS + " -f").c_str());
+	if (FS.compare("ext4") != 0 && FS.compare("xfs") != 0) {
+		r = system((std::string("rmmod ") + FS + " -f").c_str());
+	}
 
 	umount("/dev/pmem0");
 	umount("/dev/pmem1");
 
 	//load logger
 	// TODO: we end up redoing this if reload is on. set it up so we aren't doing extra work
-	r = system(std::string("insmod " + fs_module).c_str());
-	if (r < 0) {
-		debug("Failed to load nova module");
+	if (FS.compare("ext4") != 0 && FS.compare("xfs") != 0) {
+		debug("reloading fs module 1\n");
+		r = system(std::string("insmod " + fs_module).c_str());
+		if (r < 0) {
+			debug("Failed to load module");
+		}
 	}
 	r = system((std::string("insmod ") + logger).c_str());
 	if (r < 0) {
@@ -591,7 +597,6 @@ int main(int argc, char** argv)
 								mount_point_replay,
                                 pm_start, 
 								pm_size, 
-                                // std::string("NOVA"), 
 								fs_type,
 								false, 
                                 std::string(""), 
@@ -803,26 +808,29 @@ int test_loop() {
 
 
 	std::string fs_type;
-	if (FS.compare("nova")) {
+	if (FS.compare("nova") == 0) {
 		fs_type == std::string("NOVA");
 	} else {
 		fs_type = FS;
 	}
+	debug("fs type: %s\n", fs_type.c_str());
+	// TODO: automatically set configurations properly if we are using ext4 or xfs
 	if (reloadFS) {
 		//load logger
 		int r = system((std::string("rmmod logger-") + FS + " -f").c_str());
 		if (r < 0) {
 			debug("Failed to remove logger\n");
 		}
-		r = system((std::string("rmmod ") + FS + " -f").c_str());
-		if (r < 0) {
-			debug("Failed to delete nova module");
-		}
-		// r = system((std::string("modprobe ") + FS).c_str());
-		r = system(std::string("insmod " + fs_module).c_str());
-		// r = system(std::string("insmod /root/tmpdir/linux-5.1/fs/nova/nova.ko").c_str());
-		if (r < 0) {
-			debug("Failed to load nova module");
+		if (FS.compare("ext4") != 0 && FS.compare("xfs") != 0) {
+			r = system((std::string("rmmod ") + FS + " -f").c_str());
+			if (r < 0) {
+				debug("Failed to delete module");
+			}
+			debug("reloading fs module 2\n");
+			r = system(std::string("insmod " + fs_module).c_str());
+			if (r < 0) {
+				debug("Failed to load module");
+			}
 		}
 		//load logger
 		r = system((std::string("insmod ") + logger).c_str());

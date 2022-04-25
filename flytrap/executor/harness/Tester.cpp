@@ -2039,6 +2039,8 @@ int Tester::play_undo_log(int fd_replay, ofstream& log) {
     // FILE* base_fptr;
     int fd_base;
 
+    cout << "PLAY UNDO LOG" << endl;
+
     int fd_ioctl = open("/dev/ioctl_dummy", 0);
     if (fd_ioctl < 0) {
         perror("Unable to open IOCTL device");
