@@ -20,10 +20,10 @@ From now on we assume that the kernel source directory is at `flytrap/vmshare/li
 If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' are not compatible`, make sure that you have installed gcc-8 and run `sudo update-alternatives --install /usr/bin/gcc gcc  /usr/bin/gcc-8 1`.
 
 ## 3. Setting up VMs
-1. `cd` to `flytrap/syzkaller/tools/` and run the `create-image.sh` script. This will create a VM image called stretch.img and a public and private key for ssh-ing into the VMs. These can be moved out of the `tools/` directory; their locations will be specified in a configuration file later.
+1. `cd` to `flytrap/syzkaller/tools/` and run the `create-image.sh` script. This will create a VM image called stretch.img and a public and private key for ssh-ing into the VMs. Move stretch.img into the top-level `flytrap/` directory and the keys to `~/.ssh/`. 
 2. Boot the VM with the 5.1.0+ kernel and emulated PM. A script that boots the VM with the suggested arguments is provided at `boot-vm.sh`. The VM is set up for passwordless root access; log in with username `root`. It should not ask for a password.
 3. To confirm that the emulated PM is working correctly, check that `/dev/` contains `pmem0` and `pmem1` devices. 
-4. In the VM, create directories `~/tmpdir`, `/mnt/pmem`, and `/mnt/pmem_replay`. FlyTrap expects these directories in these exact locations, so don't rename or move them. 
+4. In the VM, create directories `/root/tmpdir`, `/mnt/pmem`, and `/mnt/pmem_replay`. FlyTrap expects these directories in these exact locations, so don't rename or move them. 
 5. Add the line `mount -t 9p -o trans=virtio,version=9p2000.L hostshare /root/tmpdir` to `~/.profile` in the VM. This mounts a shared directory between the host and guest. Source the .profile file and `ls ~/tmpdir` to confirm that this works; you should see the kernel source directory there. 
 6. Try loading the NOVA file system module with `insmod tmpdir/linux-5.1/fs/nova/nova.ko` and mount it at `/mnt/pmem` with `mount -t NOVA -o init /dev/pmem0 /mnt/pmem`. This should succeed, and running `df` should show that `/dev/pmem0` is mounted at `/mnt/pmem`. The VM can now be shut down.
 
