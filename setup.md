@@ -1,9 +1,13 @@
 # Setting up FlyTrap
 
 ## 1. Dependencies and directory setup
-1. Run `sudo apt-get install build-essential libncurses-dev bison flex libssl-dev libelf-dev gcc-8 g++-8 debootstrap qemu-system` to install libraries for compiling the Linux kernel and building/running virtual machines. Run `sudo update-alternatives --install /usr/bin/gcc gcc  /usr/bin/gcc-8 1` to ensure that the compilation uses the correct version of GCC for our version of the kernel.
+1. Run the following commands to install and properly set up FlyTrap's dependencies:
+```
+sudo apt-get install build-essential libncurses-dev bison flex libssl-dev libelf-dev gcc-8 g++-8 debootstrap qemu-system python3-pip 
+sudo update-alternatives --install /usr/bin/gcc gcc  /usr/bin/gcc-8 1
+pip3 install progress
+```
 2. Install Golang using the instructions here: https://go.dev/doc/install
-3. Install the Python `progress` module (required by ACE) using `pip3` (`sudo apt install python3-pip; pip3 install progress`).
 
 ## 2. Compiling the kernel
 From now on we assume that the kernel source directory is at `flytrap/vmshare/linux-5.1`.
