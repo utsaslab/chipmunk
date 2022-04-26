@@ -253,6 +253,16 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
         }
     }
 
+    if (!reorder) {
+        log << "CHECK ASYNC CRASH" << endl;
+        // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
+        // and we don't want to provide full reordering - we only want to crash after sync calls
+        ret = check_async_crash(test_name, log);
+        if (ret < 0) {
+            return ret;
+        }
+    }
+
     oracle_diff_file.close();
     if (!error_in_oracle) {
         unlink(diff_file_path.c_str());
@@ -545,6 +555,7 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                     return ret;
                 }
             } else if (!reorder) {
+                log << "CHECK ASYNC CRASH" << endl;
                 // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
                 // and we don't want to provide full reordering - we only want to crash after sync calls
                 ret = check_async_crash(test_name, log);

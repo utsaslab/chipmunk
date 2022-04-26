@@ -913,6 +913,12 @@ static int logger_ioctl(struct block_device* bdev, fmode_t mode, unsigned int cm
         case LOGGER_MARK_SYS_END:
             ret = insert_mark_sys(0, 1, (long) arg);
             break;
+        case LOGGER_UNDO_ON:
+            Log.undo = true;
+            break;
+        case LOGGER_UNDO_OFF:
+            Log.undo = false;
+            break;
     }
     return ret;
 }

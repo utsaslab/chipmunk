@@ -23,6 +23,7 @@
 #include <fstream>
 #include <cassert>
 #include <string>
+#include <chrono>
 
 
 #include <iostream>
@@ -34,6 +35,12 @@
 using std::endl;
 using namespace fs_testing;
 using namespace fs_testing::user_tools::api;
+using std::chrono::steady_clock;
+using std::chrono::duration;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+using std::chrono::microseconds;
+using std::chrono::time_point;
 
 
 #if !GOOS_windows
@@ -140,6 +147,8 @@ static void resend_execute(int fd);
 
 #define IMG1 "sudo dd if=/dev/zero of="
 #define IMG2 "/code/replay/nova_replay.img bs=128M count=1 status=noxfer > /dev/null 2>&1"
+
+bool reorder = true;
 
 #if SYZ_EXECUTOR_USES_FORK_SERVER
 static void receive_handshake();
@@ -526,6 +535,10 @@ int main(int argc, char** argv)
 	std::string command = "dd if=/dev/zero of=/dev/pmem1 bs=100M > /dev/null 2>&1";
 	system(command.c_str());
 
+	if (FS.compare("ext4") == 0 || FS.compare("xfs") == 0) {
+		reorder = false;
+	}
+
 	// clean up leftover state
 	// these will fail if nothing is loaded, but that's fine
 	int r = system((std::string("rmmod ") + logger).c_str());
@@ -813,7 +826,8 @@ int test_loop() {
 	} else {
 		fs_type = FS;
 	}
-	debug("fs type: %s\n", fs_type.c_str());
+	
+	
 	// TODO: automatically set configurations properly if we are using ext4 or xfs
 	if (reloadFS) {
 		//load logger
@@ -1081,9 +1095,14 @@ int test_loop() {
 	}
 	if (mountCov)
 		syz_tester->collect_cover = true;
-    ret = syz_tester->replay(log, shouldCheckpoint, test_name, false, true);
+	time_point<steady_clock> replay_start = steady_clock::now();
+    ret = syz_tester->replay(log, shouldCheckpoint, test_name, false, reorder);
+
+	time_point<steady_clock> replay_end = steady_clock::now();
+    milliseconds elapsed = duration_cast<milliseconds>(replay_end - replay_start);
+    log << "time to build full replay " << elapsed.count() << endl;
+    log << "----------------------------" << endl;
 	
-	debug("RAN REPLAY: %d\n", ret);
     // ret = tester->replay(checkpoint, test_name, make_trace);
     if (ret != 0) {
         // perror("replay");
@@ -1126,20 +1145,7 @@ int test_loop() {
     }
     close(fd);
 	log << "finished running tester.replay" << endl;
-    // bool retval;
-	// debug("ABOUT TO TEST REPLAY\n");
-	// debug("OUTPUT DATA MOUNT: %p\n", output_data_mount);
-	
-	// debug("TEST NAME REPLAY: %s\n", test_name.c_str());
-    // retval = syz_tester->test_replay(log, shouldCheckpoint, test_name, false, true);
-	// int i = 0;
-	// for (i = 0; i < 100; i++) {
-	// 	debug("%u\n", ((uint32_t*) output_data_mount)[i]);
-	// }
-	// debug("TESTED REPLAY\n");
-    // if (retval == false) {
-    //     std::cout << "Test failed" << endl;
-    // }
+
 	flag_collect_cover = true;
 
     debug("Cleaning up\n");
@@ -1408,6 +1414,12 @@ int execute_test(int change_fd,  bool writeCoverage)
 		execute_call(th, writeCoverage);
         res = th->res;
 		handle_completion(th, writeCoverage);
+	}
+
+	// if we are testing ext4-dax or xfs-dax, add a sync at the end to make 
+	// sure there will be a point for us to crash at. 
+	if (!reorder) {
+		cm_->CmSync();
 	}
 
 	// serialize the profile
@@ -1885,12 +1897,6 @@ intptr_t execute_cc_syscall(const call_t* call, intptr_t args[kMaxArgs]) {
             ret = syscall(call->sys_nr, (intptr_t) args[0], (intptr_t) args[1], (intptr_t) args[2], (intptr_t) args[3], (intptr_t) args[4], (intptr_t) args[5]);
             break;
     }
-	// if (checkpt) {
-	// 	if (cm_->CmCheckpoint() < 0) {
-	// 		ret = -1;
-	// 		fail("Failed to checkpoint\n");
-	// 	}
-	// }
 	if (ret < 0) {
 		syscall_success << "FAILED" << endl;
 	} else {
