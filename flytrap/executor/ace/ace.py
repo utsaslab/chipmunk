@@ -1288,6 +1288,8 @@ def doPermutation(perm, test_type):
         dest_dir = "dax_seq1"
     elif num_ops == "2":
         dest_dir = "dax_seq2"
+    elif num_ops == "3":
+        dest_dir = "dax_seq3"
     
     if nested:
         dest_dir += '_nested'
@@ -1777,40 +1779,7 @@ def main():
 
 
     # Move the resultant high-level lang files to target directory. We could choose to delete them too. But if we wanted to analyze the core-ops in a workload, looking at this file is an easier way of doing it. Also if you modify the adapter, you can simply supply the directory of j-lang files to convert to cpp. No need to go through the entire generation process.
-    # target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang* {}'
-    
-    # for seq2 workloads, there are too many files to move at once, so do it in a couple of rounds
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang11* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang12* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang1* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang2* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang3* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang4* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang5* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang6* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang7* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang8* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang9* {}'
+    target = "for file in j-lang*; do mv $file {}; done"
     subprocess.call(target.format(target_path), shell = True)
 
 
