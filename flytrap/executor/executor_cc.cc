@@ -23,6 +23,7 @@
 #include <fstream>
 #include <cassert>
 #include <string>
+#include <chrono>
 
 
 #include <iostream>
@@ -34,6 +35,12 @@
 using std::endl;
 using namespace fs_testing;
 using namespace fs_testing::user_tools::api;
+using std::chrono::steady_clock;
+using std::chrono::duration;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+using std::chrono::microseconds;
+using std::chrono::time_point;
 
 
 #if !GOOS_windows
@@ -99,8 +106,6 @@ const int kCoverFd = kOutPipeFd - kMaxThreads;
 const int kCoverSize = 256 << 10;
 const int kFailStatus = 67;
 
-const unsigned long replay_pm_start = 0x108000000; // TODO: make this command line arg or get it dynamically
-
 // Logical error (e.g. invalid input program), use as an assert() alternative.
 // If such error happens 10+ times in a row, it will be detected as a bug by syz-fuzzer.
 // syz-fuzzer will fail and syz-manager will create a bug for this.
@@ -140,6 +145,8 @@ static void resend_execute(int fd);
 
 #define IMG1 "sudo dd if=/dev/zero of="
 #define IMG2 "/code/replay/nova_replay.img bs=128M count=1 status=noxfer > /dev/null 2>&1"
+
+bool reorder = true;
 
 #if SYZ_EXECUTOR_USES_FORK_SERVER
 static void receive_handshake();
@@ -252,7 +259,8 @@ static std::string fs_module;
 static std::string FS;
 
 static unsigned long pm_start = 0x100000000;
-static unsigned long pm_size =  0x7ffffff;
+const unsigned long replay_pm_start = 0x108000000; // TODO: make this command line arg or get it dynamically
+static unsigned long pm_size = 0x7ffffff;
 
 
 typedef intptr_t(SYSCALLAPI* syscall_t)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t);
@@ -508,36 +516,46 @@ int main(int argc, char** argv)
 	os_init(argc, argv, (char*)SYZ_DATA_OFFSET, SYZ_NUM_PAGES * SYZ_PAGE_SIZE);
 	current_thread = &threads[0];
 
-	if (loadModule) {
-		// int r = system((std::string("modprobe ") + FS).c_str());
-		int r = system(std::string("insmod " + fs_module).c_str());
-		// int r = system(std::string("insmod /root/tmpdir/linux-5.1/fs/nova/nova.ko").c_str());
-		if (r < 0) {
-			debug("Failed to load module\n");
-		}
-	}
-
-	std::string command = "dd if=/dev/zero of=/dev/pmem1 bs=100M > /dev/null 2>&1";
-	system(command.c_str());
-
 	// TODO: unmount the file systems if they are still mounted from a past run
 	// it's fine if these fail; the systems may not be mounted
 	umount("/dev/pmem0");
 	umount("/dev/pmem1");
 
+	// // TODO: automatically set loadmodule properly if we are using ext4 or xfs
+	// // TODO: this isn't necessary, is it? we load it again shortly
+	// if (loadModule && FS.compare("ext4") != 0 && FS.compare("xfs") != 0) {
+	// 	cout << "reloading fs module 3" << endl;
+	// 	int r = system(std::string("insmod " + fs_module).c_str());
+	// 	if (r < 0) {
+	// 		debug("Failed to load module\n");
+	// 	}
+	// }
+
+	std::string command = "dd if=/dev/zero of=/dev/pmem1 bs=100M > /dev/null 2>&1";
+	system(command.c_str());
+
+	if (FS.compare("ext4") == 0 || FS.compare("xfs") == 0) {
+		reorder = false;
+	}
+
 	// clean up leftover state
 	// these will fail if nothing is loaded, but that's fine
 	int r = system((std::string("rmmod ") + logger).c_str());
-	r = system((std::string("rmmod ") + FS + " -f").c_str());
+	if (FS.compare("ext4") != 0 && FS.compare("xfs") != 0) {
+		r = system((std::string("rmmod ") + FS + " -f").c_str());
+	}
 
 	umount("/dev/pmem0");
 	umount("/dev/pmem1");
 
 	//load logger
 	// TODO: we end up redoing this if reload is on. set it up so we aren't doing extra work
-	r = system(std::string("insmod " + fs_module).c_str());
-	if (r < 0) {
-		debug("Failed to load nova module");
+	if (FS.compare("ext4") != 0 && FS.compare("xfs") != 0) {
+		debug("reloading fs module 1\n");
+		r = system(std::string("insmod " + fs_module).c_str());
+		if (r < 0) {
+			debug("Failed to load module");
+		}
 	}
 	r = system((std::string("insmod ") + logger).c_str());
 	if (r < 0) {
@@ -591,7 +609,6 @@ int main(int argc, char** argv)
 								mount_point_replay,
                                 pm_start, 
 								pm_size, 
-                                // std::string("NOVA"), 
 								fs_type,
 								false, 
                                 std::string(""), 
@@ -803,26 +820,30 @@ int test_loop() {
 
 
 	std::string fs_type;
-	if (FS.compare("nova")) {
+	if (FS.compare("nova") == 0) {
 		fs_type == std::string("NOVA");
 	} else {
 		fs_type = FS;
 	}
+	
+	
+	// TODO: automatically set configurations properly if we are using ext4 or xfs
 	if (reloadFS) {
 		//load logger
 		int r = system((std::string("rmmod logger-") + FS + " -f").c_str());
 		if (r < 0) {
 			debug("Failed to remove logger\n");
 		}
-		r = system((std::string("rmmod ") + FS + " -f").c_str());
-		if (r < 0) {
-			debug("Failed to delete nova module");
-		}
-		// r = system((std::string("modprobe ") + FS).c_str());
-		r = system(std::string("insmod " + fs_module).c_str());
-		// r = system(std::string("insmod /root/tmpdir/linux-5.1/fs/nova/nova.ko").c_str());
-		if (r < 0) {
-			debug("Failed to load nova module");
+		if (FS.compare("ext4") != 0 && FS.compare("xfs") != 0) {
+			r = system((std::string("rmmod ") + FS + " -f").c_str());
+			if (r < 0) {
+				debug("Failed to delete module");
+			}
+			debug("reloading fs module 2\n");
+			r = system(std::string("insmod " + fs_module).c_str());
+			if (r < 0) {
+				debug("Failed to load module");
+			}
 		}
 		//load logger
 		r = system((std::string("insmod ") + logger).c_str());
@@ -1073,9 +1094,14 @@ int test_loop() {
 	}
 	if (mountCov)
 		syz_tester->collect_cover = true;
-    ret = syz_tester->replay(log, shouldCheckpoint, test_name, false, true);
+	time_point<steady_clock> replay_start = steady_clock::now();
+    ret = syz_tester->replay(log, shouldCheckpoint, test_name, false, reorder);
+
+	time_point<steady_clock> replay_end = steady_clock::now();
+    milliseconds elapsed = duration_cast<milliseconds>(replay_end - replay_start);
+    log << "time to build full replay " << elapsed.count() << endl;
+    log << "----------------------------" << endl;
 	
-	debug("RAN REPLAY: %d\n", ret);
     // ret = tester->replay(checkpoint, test_name, make_trace);
     if (ret != 0) {
         // perror("replay");
@@ -1118,20 +1144,7 @@ int test_loop() {
     }
     close(fd);
 	log << "finished running tester.replay" << endl;
-    // bool retval;
-	// debug("ABOUT TO TEST REPLAY\n");
-	// debug("OUTPUT DATA MOUNT: %p\n", output_data_mount);
-	
-	// debug("TEST NAME REPLAY: %s\n", test_name.c_str());
-    // retval = syz_tester->test_replay(log, shouldCheckpoint, test_name, false, true);
-	// int i = 0;
-	// for (i = 0; i < 100; i++) {
-	// 	debug("%u\n", ((uint32_t*) output_data_mount)[i]);
-	// }
-	// debug("TESTED REPLAY\n");
-    // if (retval == false) {
-    //     std::cout << "Test failed" << endl;
-    // }
+
 	flag_collect_cover = true;
 
     debug("Cleaning up\n");
@@ -1400,6 +1413,12 @@ int execute_test(int change_fd,  bool writeCoverage)
 		execute_call(th, writeCoverage);
         res = th->res;
 		handle_completion(th, writeCoverage);
+	}
+
+	// if we are testing ext4-dax or xfs-dax, add a sync at the end to make 
+	// sure there will be a point for us to crash at. 
+	if (!reorder) {
+		cm_->CmSync();
 	}
 
 	// serialize the profile
@@ -1877,12 +1896,6 @@ intptr_t execute_cc_syscall(const call_t* call, intptr_t args[kMaxArgs]) {
             ret = syscall(call->sys_nr, (intptr_t) args[0], (intptr_t) args[1], (intptr_t) args[2], (intptr_t) args[3], (intptr_t) args[4], (intptr_t) args[5]);
             break;
     }
-	// if (checkpt) {
-	// 	if (cm_->CmCheckpoint() < 0) {
-	// 		ret = -1;
-	// 		fail("Failed to checkpoint\n");
-	// 	}
-	// }
 	if (ret < 0) {
 		syscall_success << "FAILED" << endl;
 	} else {

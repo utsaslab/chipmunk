@@ -98,7 +98,7 @@ public:
     int make_and_check_crash_states(int fd_replay, int fd, int checkpoint, std::ofstream& log, std::string test_name, std::ofstream& trace_file, bool make_trace, int &mod_index, bool reorder);
     int check_crash_state(int fd_replay, std::string test_name, std::ofstream& log, int checkpoint, bool reorder, bool syscall_finished);
     int find_disk_mod(struct syscall_record sr, std::ofstream& log, std::ofstream& oracle_diff_file);
-    int check_async_crash(std::string test_name, std::ofstream& log);
+    int check_async_crash(int fd_replay, std::string test_name, std::ofstream& log);
 
     std::vector<struct write_op*> write_queue;
     std::vector<struct write_op *> epoch_data_writes;

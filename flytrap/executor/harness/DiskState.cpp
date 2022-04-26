@@ -497,7 +497,10 @@ bool DiskState::check_exists(string path, ofstream& diff_file, ofstream& log, bo
 bool DiskState::check_generic(string path, ofstream& diff_file, ofstream& log, bool syscall_finished) {
     int ret;
     FileState crash_file_state, *oracle_file_state_new, *oracle_file_state_old;
+    cout << "check generic" << endl;
+    cout << "path before fix: " << path << endl;
     path = fix_filepath(path);
+    cout << "path: " << path << endl;
     // construct path to the file in the crash state
     string relpath;
     if (path.compare(mount_point) == 0) {
@@ -505,6 +508,7 @@ bool DiskState::check_generic(string path, ofstream& diff_file, ofstream& log, b
     } else {
         relpath = path.substr(mount_point.size() + 1, string::npos);
     }
+    cout << "relpath: " << relpath << endl;
     string crash_path = replay_mount_point + "/" + relpath;
 
     int num_oracle_states = contents[relpath].size();

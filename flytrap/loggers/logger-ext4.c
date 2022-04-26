@@ -16,12 +16,7 @@
 #include "logger.h"
 #include "../executor/ioctl.h"
 
-// #define FAIL -1
-// #define SUCCESS 0
-// #define DEVICE_NAME "ioctl_dummy"
-// #define NUM_KPROBE_ADDRS 32
-// static int major_num = 0;
-// // static DEFINE_SPINLOCK(kprobe_lock);
+// TODO: refactor
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Hayley LeBlanc");
@@ -32,7 +27,8 @@ struct kprobe_node* kp_cache_wb_head = NULL;
 struct kprobe_node* kp_pmem_copy_head = NULL;
 
 unsigned long pm_start = 0x100000000;
-unsigned long pm_end = 0x107ffffff;
+// unsigned long pm_end = 0x107ffffff;
+unsigned long pm_size = 0x7ffffff;
 
 
 unsigned long* kp_write_pmem_addrs;
@@ -48,91 +44,176 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
     struct stack_trace trace;
     // add an entry to the write log
     
-    if (Log.logging_on && (unsigned long long)(virt_to_phys((void*)regs->di)) >= pm_start && (unsigned long long)(virt_to_phys((void*)regs->di)) < pm_end) {
+    if (Log.logging_on && (unsigned long long)(virt_to_phys((void*)regs->di)) >= pm_start && (unsigned long long)(virt_to_phys((void*)regs->di)) < (pm_start+pm_size)) {
         // imitate the loop that write_pmem does, since there isn't a good way to get all the data otherwise
         pmem_addr = (void*)regs->di;
         page = (struct page*)regs->si;
         off = (unsigned int)regs->dx;
         len = (unsigned int)regs->cx;
-        while (len) {
-            new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
-            if  (new_op == NULL) {
-                printk(KERN_ALERT "logger: could not allocate space for log entry\n");
-                kprobe_fail = 1;
-                goto out;
-            }
+        if (!Log.undo) {
+            while (len) {
+                new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
+                if  (new_op == NULL) {
+                    printk(KERN_ALERT "logger: could not allocate space for log entry\n");
+                    kprobe_fail = 1;
+                    goto out;
+                }
 
-            new_op->next = NULL;
-            new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
-            if (new_op->metadata == NULL) {
-                printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
-                kfree(new_op);
-                kprobe_fail = 1;
-                goto out;
-            }
+                new_op->next = NULL;
+                new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
+                if (new_op->metadata == NULL) {
+                    printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
+                    kfree(new_op);
+                    kprobe_fail = 1;
+                    goto out;
+                }
 
-            // save call stack so we can determine where in the FS code the kprobe was hit
-            trace.nr_entries = 0;
-            trace.entries = &(new_op->metadata->trace_entries[0]);
-            trace.max_entries = TRACE_SIZE;
-            trace.skip = TRACE_SKIP;
-            save_stack_trace(&trace);
-            new_op->metadata->nr_entries = trace.nr_entries;
+                // save call stack so we can determine where in the FS code the kprobe was hit
+                trace.nr_entries = 0;
+                trace.entries = &(new_op->metadata->trace_entries[0]);
+                trace.max_entries = TRACE_SIZE;
+                trace.skip = TRACE_SKIP;
+                save_stack_trace(&trace);
+                new_op->metadata->nr_entries = trace.nr_entries;
 
-            // metadata takes a little work to get from write_pmem, but it's better to kprobe 
-            // write_pmem than memcpy_flushcache (what it wraps) because memcpy_flushcache is always 
-            // inlined (i.e. hard to probe correctly) and I don't think we want to make people go in and 
-            // mess with parts of the kernel that aren't part of their fs if we can avoid it
-            mem = kmap_atomic(page);
-            chunk = min_t(unsigned int, len, PAGE_SIZE - off); 
+                // metadata takes a little work to get from write_pmem, but it's better to kprobe 
+                // write_pmem than memcpy_flushcache (what it wraps) because memcpy_flushcache is always 
+                // inlined (i.e. hard to probe correctly) and I don't think we want to make people go in and 
+                // mess with parts of the kernel that aren't part of their fs if we can avoid it
+                mem = kmap_atomic(page);
+                chunk = min_t(unsigned int, len, PAGE_SIZE - off); 
 
-            new_op->metadata->len = chunk;
-            new_op->metadata->dst = (unsigned long long)pmem_addr;
-            new_op->metadata->src = (unsigned long long)(mem + off);
-            new_op->metadata->type = NT;
-            new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
+                new_op->metadata->len = chunk;
+                new_op->metadata->dst = (unsigned long long)pmem_addr;
+                new_op->metadata->src = (unsigned long long)(mem + off);
+                new_op->metadata->type = NT;
+                new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
 
-            // allocate space for the data
-            new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
-            if (new_op->data == NULL) {
-                printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
+                // allocate space for the data
+                new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
+                if (new_op->data == NULL) {
+                    printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
+                    kunmap_atomic(mem);
+                    kfree(new_op->metadata);
+                    kfree(new_op);
+                    kprobe_fail = 1;
+                    goto out;
+                }
+                // copy the data to the log
+                // this function ensures that faults are handled correctly when reading data 
+                // that may be coming from user space
+                ret = probe_kernel_read(new_op->data, (void*)new_op->metadata->src, new_op->metadata->len);
+                if (ret < 0) {
+                    kunmap_atomic(mem);
+                    kfree(new_op->metadata);
+                    kfree(new_op);
+                    kprobe_fail = 1;
+                    goto out;
+                }
                 kunmap_atomic(mem);
-                kfree(new_op->metadata);
-                kfree(new_op);
-                kprobe_fail = 1;
-                goto out;
+
+                spin_lock(&kprobe_lock);
+                if (Log.tail != NULL) {
+                    Log.tail->next = new_op;
+                    Log.tail = new_op;
+                }
+                else {
+                    Log.tail = new_op;
+                }
+                if (Log.head == NULL) {
+                    Log.head = new_op;
+                }
+                spin_unlock(&kprobe_lock);
+
+                // update the variables that let us read stuff
+                len -= chunk;
+                off = 0;
+                page++;
+                pmem_addr += chunk;
             }
-            // copy the data to the log
-            // this function ensures that faults are handled correctly when reading data 
-            // that may be coming from user space
-            ret = probe_kernel_read(new_op->data, (void*)new_op->metadata->src, new_op->metadata->len);
-            if (ret < 0) {
+        } else { // record undo entries
+            printk(KERN_ALERT "write pmem undo entries\n");
+            while (len) {
+                new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
+                if  (new_op == NULL) {
+                    printk(KERN_ALERT "logger: could not allocate space for log entry\n");
+                    kprobe_fail = 1;
+                    goto out;
+                }
+
+                new_op->next = NULL;
+                new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
+                if (new_op->metadata == NULL) {
+                    printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
+                    kfree(new_op);
+                    kprobe_fail = 1;
+                    goto out;
+                }
+
+                // // save call stack so we can determine where in the FS code the kprobe was hit
+                // trace.nr_entries = 0;
+                // trace.entries = &(new_op->metadata->trace_entries[0]);
+                // trace.max_entries = TRACE_SIZE;
+                // trace.skip = TRACE_SKIP;
+                // save_stack_trace(&trace);
+                // new_op->metadata->nr_entries = trace.nr_entries;
+
+                // metadata takes a little work to get from write_pmem, but it's better to kprobe 
+                // write_pmem than memcpy_flushcache (what it wraps) because memcpy_flushcache is always 
+                // inlined (i.e. hard to probe correctly) and I don't think we want to make people go in and 
+                // mess with parts of the kernel that aren't part of their fs if we can avoid it
+                mem = kmap_atomic(page);
+                chunk = min_t(unsigned int, len, PAGE_SIZE - off); 
+
+                new_op->metadata->len = chunk;
+                new_op->metadata->dst = (unsigned long long)(virt_to_phys((void*)pmem_addr));
+                new_op->metadata->src = (unsigned long long)(mem + off);
+                new_op->metadata->type = NT;
+                new_op->data = NULL;
+                // new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
+
+                // // allocate space for the data
+                // new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
+                // if (new_op->data == NULL) {
+                //     printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
+                //     kunmap_atomic(mem);
+                //     kfree(new_op->metadata);
+                //     kfree(new_op);
+                //     kprobe_fail = 1;
+                //     goto out;
+                // }
+                // // copy the data to the log
+                // // this function ensures that faults are handled correctly when reading data 
+                // // that may be coming from user space
+                // ret = probe_kernel_read(new_op->data, (void*)new_op->metadata->src, new_op->metadata->len);
+                // if (ret < 0) {
+                //     kunmap_atomic(mem);
+                //     kfree(new_op->metadata);
+                //     kfree(new_op);
+                //     kprobe_fail = 1;
+                //     goto out;
+                // }
                 kunmap_atomic(mem);
-                kfree(new_op->metadata);
-                kfree(new_op);
-                kprobe_fail = 1;
-                goto out;
-            }
-            kunmap_atomic(mem);
 
-            spin_lock(&kprobe_lock);
-            if (Log.tail != NULL) {
-                Log.tail->next = new_op;
-                Log.tail = new_op;
-            }
-            else {
-                Log.tail = new_op;
-            }
-            if (Log.head == NULL) {
-                Log.head = new_op;
-            }
-            spin_unlock(&kprobe_lock);
+                spin_lock(&kprobe_lock);
+                if (Log.tail != NULL) {
+                    Log.tail->next = new_op;
+                    Log.tail = new_op;
+                }
+                else {
+                    Log.tail = new_op;
+                }
+                if (Log.head == NULL) {
+                    Log.head = new_op;
+                }
+                spin_unlock(&kprobe_lock);
 
-            // update the variables that let us read stuff
-            len -= chunk;
-            off = 0;
-            page++;
-            pmem_addr += chunk;
+                // update the variables that let us read stuff
+                len -= chunk;
+                off = 0;
+                page++;
+                pmem_addr += chunk;
+            }
         }
     }
 
@@ -149,7 +230,7 @@ static int __kprobes kp_nvdimm_flush_pre_handler(struct kprobe *p, struct pt_reg
     struct write_op* new_op;
     struct stack_trace trace;
 
-    if (Log.logging_on) {
+    if (Log.logging_on && !Log.undo) {
         new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
         if (new_op == NULL) {
             printk(KERN_ALERT "logger: could not allocate space for log entry\n");
@@ -209,83 +290,163 @@ static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *r
     struct stack_trace trace;
     unsigned long long mod64, start, len;
     start = (unsigned long long)(virt_to_phys((void*)regs->di));
-    if (Log.logging_on && start >= pm_start && start < pm_end) {
-        len = regs->si;
-        // if the start address is not on a cacheline boundary, move it back to 
-        // one and increase the length of the write accordingly
-        mod64 = start % CACHELINE_SIZE;
-        if (mod64 != 0) {
-            start -= mod64;
-            len += mod64;
-        }
-        // if the length of the write is not divisible by the cache line size, 
-        // we need to make sure we copy out the whole last cache line that it touches
-        if (len % CACHELINE_SIZE != 0) {
-            len += CACHELINE_SIZE - (len % CACHELINE_SIZE);
-        }
-        new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
-        if (new_op == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry\n");
-            kprobe_fail = 1;
-            goto out;
-        }
+    if (Log.logging_on && start >= pm_start && start < (pm_start+pm_size)) {
+        if (!Log.undo) {
+            len = regs->si;
+            // if the start address is not on a cacheline boundary, move it back to 
+            // one and increase the length of the write accordingly
+            mod64 = start % CACHELINE_SIZE;
+            if (mod64 != 0) {
+                start -= mod64;
+                len += mod64;
+            }
+            // if the length of the write is not divisible by the cache line size, 
+            // we need to make sure we copy out the whole last cache line that it touches
+            if (len % CACHELINE_SIZE != 0) {
+                len += CACHELINE_SIZE - (len % CACHELINE_SIZE);
+            }
+            new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
+            if (new_op == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry\n");
+                kprobe_fail = 1;
+                goto out;
+            }
 
-        new_op->next = NULL;
-        new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
-        if (new_op->metadata == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
-            kfree(new_op);
-            kprobe_fail = 1;
-            goto out;
-        }
+            new_op->next = NULL;
+            new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
+            if (new_op->metadata == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
+                kfree(new_op);
+                kprobe_fail = 1;
+                goto out;
+            }
 
-        // save call stack so we can determine where in the FS code the kprobe was hit
-        trace.nr_entries = 0;
-        trace.entries = &(new_op->metadata->trace_entries[0]);
-        trace.max_entries = TRACE_SIZE;
-        trace.skip = TRACE_SKIP;
-        save_stack_trace(&trace);
-        new_op->metadata->nr_entries = trace.nr_entries;
+            // save call stack so we can determine where in the FS code the kprobe was hit
+            trace.nr_entries = 0;
+            trace.entries = &(new_op->metadata->trace_entries[0]);
+            trace.max_entries = TRACE_SIZE;
+            trace.skip = TRACE_SKIP;
+            save_stack_trace(&trace);
+            new_op->metadata->nr_entries = trace.nr_entries;
 
-        // copy metadata to log entry
-        // here, source and destination are the same
-        new_op->metadata->len = len;
-        new_op->metadata->src = (unsigned long long)(virt_to_phys((void*)regs->di));
-        new_op->metadata->dst = (unsigned long long)(virt_to_phys((void*)regs->di));
-        new_op->metadata->type = CLWB;
-        new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
+            // copy metadata to log entry
+            // here, source and destination are the same
+            new_op->metadata->len = len;
+            new_op->metadata->src = (unsigned long long)(virt_to_phys((void*)regs->di));
+            new_op->metadata->dst = (unsigned long long)(virt_to_phys((void*)regs->di));
+            new_op->metadata->type = CLWB;
+            new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
 
 
-        // allocate space for the data
-        new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
-        if (new_op->data == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
-            kfree(new_op->metadata);
-            kfree(new_op);
-            kprobe_fail = 1;
-            goto out;
-        }
+            // allocate space for the data
+            new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
+            if (new_op->data == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
+                kfree(new_op->metadata);
+                kfree(new_op);
+                kprobe_fail = 1;
+                goto out;
+            }
 
-        // copy the data to the log
-        ret = probe_kernel_read(new_op->data, (void*)regs->di, new_op->metadata->len);
-        if (ret < 0) {
-            printk(KERN_ALERT "logger: could not read data\n");
-            kprobe_fail = 1;
-            goto out;
-        }
+            // copy the data to the log
+            ret = probe_kernel_read(new_op->data, (void*)regs->di, new_op->metadata->len);
+            if (ret < 0) {
+                printk(KERN_ALERT "logger: could not read data\n");
+                kprobe_fail = 1;
+                goto out;
+            }
 
-        spin_lock(&kprobe_lock);
-        if (Log.tail != NULL) {
-            Log.tail->next = new_op;
-            Log.tail = new_op;
+            spin_lock(&kprobe_lock);
+            if (Log.tail != NULL) {
+                Log.tail->next = new_op;
+                Log.tail = new_op;
+            }
+            else {
+                Log.tail = new_op;
+            }
+            if (Log.head == NULL) {
+                Log.head = new_op;
+            }
+            spin_unlock(&kprobe_lock);
+        } else { // undo entry
+            printk(KERN_ALERT "write cache wb entries\n");
+            len = regs->si;
+            // if the start address is not on a cacheline boundary, move it back to 
+            // one and increase the length of the write accordingly
+            mod64 = start % CACHELINE_SIZE;
+            if (mod64 != 0) {
+                start -= mod64;
+                len += mod64;
+            }
+            // if the length of the write is not divisible by the cache line size, 
+            // we need to make sure we copy out the whole last cache line that it touches
+            if (len % CACHELINE_SIZE != 0) {
+                len += CACHELINE_SIZE - (len % CACHELINE_SIZE);
+            }
+            new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
+            if (new_op == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry\n");
+                kprobe_fail = 1;
+                goto out;
+            }
+
+            new_op->next = NULL;
+            new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
+            if (new_op->metadata == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
+                kfree(new_op);
+                kprobe_fail = 1;
+                goto out;
+            }
+
+            // save call stack so we can determine where in the FS code the kprobe was hit
+            trace.nr_entries = 0;
+            trace.entries = &(new_op->metadata->trace_entries[0]);
+            trace.max_entries = TRACE_SIZE;
+            trace.skip = TRACE_SKIP;
+            save_stack_trace(&trace);
+            new_op->metadata->nr_entries = trace.nr_entries;
+
+            // copy metadata to log entry
+            // here, source and destination are the same
+            new_op->metadata->len = len;
+            new_op->metadata->src = (unsigned long long)(virt_to_phys((void*)regs->di));
+            new_op->metadata->dst = (unsigned long long)(virt_to_phys((void*)regs->di));
+            new_op->metadata->type = CLWB;
+            new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
+            new_op->data = NULL;
+
+            // // allocate space for the data
+            // new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
+            // if (new_op->data == NULL) {
+            //     printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
+            //     kfree(new_op->metadata);
+            //     kfree(new_op);
+            //     kprobe_fail = 1;
+            //     goto out;
+            // }
+
+            // // copy the data to the log
+            // ret = probe_kernel_read(new_op->data, (void*)regs->di, new_op->metadata->len);
+            // if (ret < 0) {
+            //     printk(KERN_ALERT "logger: could not read data\n");
+            //     kprobe_fail = 1;
+            //     goto out;
+            // }
+
+            spin_lock(&kprobe_lock);
+            if (Log.tail != NULL) {
+                Log.tail->next = new_op;
+                Log.tail = new_op;
+            }
+            else {
+                Log.tail = new_op;
+            }
+            if (Log.head == NULL) {
+                Log.head = new_op;
+            }
+            spin_unlock(&kprobe_lock);
         }
-        else {
-            Log.tail = new_op;
-        }
-        if (Log.head == NULL) {
-            Log.head = new_op;
-        }
-        spin_unlock(&kprobe_lock);
 
     }
 
@@ -305,73 +466,139 @@ static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *
 
     // TODO: this one might be more correct to be in a loop as well
     
-    if (Log.logging_on && (unsigned long long)(virt_to_phys((void*)regs->dx)) >= pm_start && (unsigned long long)(virt_to_phys((void*)regs->dx)) < pm_end) {
-        
-        new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
-        if (new_op == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry\n");
-            kprobe_fail = 1;
-            goto out;
+    if (Log.logging_on && (unsigned long long)(virt_to_phys((void*)regs->dx)) >= pm_start && (unsigned long long)(virt_to_phys((void*)regs->dx)) < (pm_start+pm_size)) {
+        if (!Log.undo) {
+            new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
+            if (new_op == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry\n");
+                kprobe_fail = 1;
+                goto out;
+            }
+
+            new_op->next = NULL;
+            new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
+            if (new_op->metadata == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
+                kfree(new_op);
+                kprobe_fail = 1;
+                goto out;
+            }
+
+            new_op->metadata->type = NT;
+
+            // save call stack so we can determine where in the FS code the kprobe was hit
+            trace.nr_entries = 0;
+            trace.entries = &(new_op->metadata->trace_entries[0]);
+            trace.max_entries = TRACE_SIZE;
+            trace.skip = TRACE_SKIP;
+            save_stack_trace(&trace);
+            new_op->metadata->nr_entries = trace.nr_entries;
+
+            new_op->metadata->len = regs->cx;
+            new_op->metadata->dst = regs->dx; 
+            new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
+
+
+            // allocate space for the data
+            new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
+            if (new_op->data == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
+                kfree(new_op->metadata);
+                kfree(new_op);
+                kprobe_fail = 1;
+                goto out;
+            }
+
+            ret = probe_kernel_read(&iter, (void*)regs->r8, sizeof(struct iov_iter));
+            if (ret < 0) {
+                kprobe_fail = 1;
+                goto out;
+            }
+            ret = copy_from_iter_flushcache(new_op->data, new_op->metadata->len, &iter);
+            if (ret < 0) {
+                kprobe_fail = 1;
+                goto out;
+            }
+
+            spin_lock(&kprobe_lock);
+            if (Log.tail != NULL) {
+                Log.tail->next = new_op;
+                Log.tail = new_op;
+            }
+            else {
+                Log.tail = new_op;
+            }
+            if (Log.head == NULL) {
+                Log.head = new_op;
+            }
+            spin_unlock(&kprobe_lock);
+        } else { // undo entry
+            printk(KERN_ALERT "write pmem copy entries\n");
+            new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
+            if (new_op == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry\n");
+                kprobe_fail = 1;
+                goto out;
+            }
+
+            new_op->next = NULL;
+            new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
+            if (new_op->metadata == NULL) {
+                printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
+                kfree(new_op);
+                kprobe_fail = 1;
+                goto out;
+            }
+
+            new_op->metadata->type = NT;
+
+            // save call stack so we can determine where in the FS code the kprobe was hit
+            trace.nr_entries = 0;
+            trace.entries = &(new_op->metadata->trace_entries[0]);
+            trace.max_entries = TRACE_SIZE;
+            trace.skip = TRACE_SKIP;
+            save_stack_trace(&trace);
+            new_op->metadata->nr_entries = trace.nr_entries;
+
+            new_op->metadata->len = regs->cx;
+            new_op->metadata->dst = regs->dx; 
+            new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
+            new_op->data = NULL;
+
+            // // allocate space for the data
+            // new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
+            // if (new_op->data == NULL) {
+            //     printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
+            //     kfree(new_op->metadata);
+            //     kfree(new_op);
+            //     kprobe_fail = 1;
+            //     goto out;
+            // }
+
+            // ret = probe_kernel_read(&iter, (void*)regs->r8, sizeof(struct iov_iter));
+            // if (ret < 0) {
+            //     kprobe_fail = 1;
+            //     goto out;
+            // }
+            // ret = copy_from_iter_flushcache(new_op->data, new_op->metadata->len, &iter);
+            // if (ret < 0) {
+            //     kprobe_fail = 1;
+            //     goto out;
+            // }
+
+            spin_lock(&kprobe_lock);
+            if (Log.tail != NULL) {
+                Log.tail->next = new_op;
+                Log.tail = new_op;
+            }
+            else {
+                Log.tail = new_op;
+            }
+            if (Log.head == NULL) {
+                Log.head = new_op;
+            }
+            spin_unlock(&kprobe_lock);
         }
-
-        new_op->next = NULL;
-        new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
-        if (new_op->metadata == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
-            kfree(new_op);
-            kprobe_fail = 1;
-            goto out;
-        }
-
-        new_op->metadata->type = NT;
-
-        // save call stack so we can determine where in the FS code the kprobe was hit
-        trace.nr_entries = 0;
-        trace.entries = &(new_op->metadata->trace_entries[0]);
-        trace.max_entries = TRACE_SIZE;
-        trace.skip = TRACE_SKIP;
-        save_stack_trace(&trace);
-        new_op->metadata->nr_entries = trace.nr_entries;
-
-        new_op->metadata->len = regs->cx;
-        new_op->metadata->dst = regs->dx; 
-        new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
-
-
-        // allocate space for the data
-        new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
-        if (new_op->data == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
-            kfree(new_op->metadata);
-            kfree(new_op);
-            kprobe_fail = 1;
-            goto out;
-        }
-
-        ret = probe_kernel_read(&iter, (void*)regs->r8, sizeof(struct iov_iter));
-        if (ret < 0) {
-            kprobe_fail = 1;
-            goto out;
-        }
-        ret = copy_from_iter_flushcache(new_op->data, new_op->metadata->len, &iter);
-        if (ret < 0) {
-            kprobe_fail = 1;
-            goto out;
-        }
-
-        spin_lock(&kprobe_lock);
-        if (Log.tail != NULL) {
-            Log.tail->next = new_op;
-            Log.tail = new_op;
-        }
-        else {
-            Log.tail = new_op;
-        }
-        if (Log.head == NULL) {
-            Log.head = new_op;
-        }
-        spin_unlock(&kprobe_lock);
-
     }
 
     return SUCCESS;
@@ -536,7 +763,8 @@ static int __init logger_init(void) {
     Log.head = NULL;
     Log.tail = NULL;
     spin_unlock(&kprobe_lock);
-    Log.logging_on = true; // TODO: change to false when done testing
+    Log.logging_on = false;
+    Log.undo = false;
 
     // create device for user processes to interact with this module via IOCTL
     // register the device
@@ -912,6 +1140,18 @@ static int logger_ioctl(struct block_device* bdev, fmode_t mode, unsigned int cm
             break;
         case LOGGER_MARK_SYS_END:
             ret = insert_mark_sys(0, 1, (long) arg);
+            break;
+        case LOGGER_UNDO_ON:
+            printk(KERN_ALERT "turning undo log on\n");
+            Log.undo = true;
+            break;
+        case LOGGER_UNDO_OFF:
+            printk(KERN_ALERT "turning undo log off\n");
+            Log.undo = false;
+            break;
+        case LOGGER_SET_PM_START:
+            printk(KERN_ALERT "setting pm start to %p\n", arg);
+            pm_start = arg;
             break;
     }
     return ret;
