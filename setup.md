@@ -49,7 +49,9 @@ If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' a
 1. Make sure you have compiled FlyTrap
 2. Run `cd flytrap; cp -r bin/* flytrap/vmshare/syzkallerBinaries` to copy the binaries for the FlyTrap files into the shared directory. 
 3. Boot the VM and copy the contents of `/root/tmpdir/syzkallerBinaries/` into another directory `/root/syzkallerBinaries` - this is necessary because some of the memory management that code from Syzkaller does will not work if it is run from within the shared directory. 
-4. **TODO: finish**
+4. `cd` to `/root/syzkallerBinaries/linux_amd64` and run `./syz-execprog -crashConsistency -mountCov <program name>`. The program name should just be the hexadecimal name of a file produced by the fuzzer and placed in the `vmshare-#/crashConsistencyProgs` and syz-execprog will automatically look in `/root/tmpdir/crashConsistencyProgs` for it. You may need to move the program from an instance-specific vmshare directory to the main one. 
+    - By default, execprog tests NOVA. To test a different file system, add the arguments `-fs=<fs name> -fs_path=<absolute path to FS .ko file on the VM> -logger=<absolute path to logger .ko file on the VM>`. If the FS under test is built into the kernel, pass the empty string "" to `-fs_path`.
+    - syz-execprog mocks some of the fuzzing infrastructure that the executor expects, but otherwise runs the exact same code as the fuzzer when testing the file system.
 
 ## 6. Building and running ACE tests
 1. `cd` to `flytrap/` and run `make`.
