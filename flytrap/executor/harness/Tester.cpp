@@ -253,15 +253,16 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
         }
     }
 
-    if (!reorder) {
-        log << "CHECK ASYNC CRASH" << endl;
-        // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
-        // and we don't want to provide full reordering - we only want to crash after sync calls
-        ret = check_async_crash(test_name, log);
-        if (ret < 0) {
-            return ret;
-        }
-    }
+    // is this necessary?
+    // if (!reorder) {
+    //     log << "CHECK ASYNC CRASH" << endl;
+    //     // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
+    //     // and we don't want to provide full reordering - we only want to crash after sync calls
+    //     ret = check_async_crash(fd_replay, test_name, log);
+    //     if (ret < 0) {
+    //         return ret;
+    //     }
+    // }
 
     oracle_diff_file.close();
     if (!error_in_oracle) {
@@ -558,7 +559,7 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                 log << "CHECK ASYNC CRASH" << endl;
                 // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
                 // and we don't want to provide full reordering - we only want to crash after sync calls
-                ret = check_async_crash(test_name, log);
+                ret = check_async_crash(fd_replay, test_name, log);
                 if (ret < 0) {
                     return ret;
                 }
@@ -612,6 +613,16 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                 
                 if (ret < 0) {
                     cout << "check crash state < 0 in mark sys end" << endl;
+                    return ret;
+                }
+            } else if (tester_type.compare("syz") == 0) {
+                // this is a bit inefficient because we should really only run check async crash
+                // when a (f)(data)sync call has been made
+                // TODO: check for that and only perform checks when necessary
+                string check_name = test_name + "_mod" + to_string(call_index);
+                ret = check_async_crash(fd_replay, check_name, log);
+                if (ret < 0) {
+                    cout << "check async crash state < 0 in mark sys end" << endl;
                     return ret;
                 }
             }
@@ -1606,143 +1617,190 @@ int Tester::check_crash_state(int fd_replay, string test_name, ofstream& log, in
  * we can probably disable the management of the base replay device when this type 
  * of file system is being tested; would improve performance a bit
  */
-int Tester::check_async_crash(string test_name, ofstream& log) {
+int Tester::check_async_crash(int fd_replay, string test_name, ofstream& log) {
     int ret, fd_ioctl;
     milliseconds elapsed;
     string path, command;
-    DiskMod mod;
+    DiskMod mod = mods_[mod_index]; // TODO: make sure that using mod index works with ACE tests
     bool passed = true;
     SingleTestInfo test_info;
     test_info.test_num = 0; // TODO: this is wrong. do we have to set this?
 
-    time_point<steady_clock> check_state = steady_clock::now();
+    if (mod.return_value >= 0 && 
+        (mod.mod_type == DiskMod::kFsyncMod || 
+        mod.mod_type == DiskMod::kSyncMod || 
+        (mod.mod_type == DiskMod::kDataMod || 
+        mod.mod_type == DiskMod::kSyncFileRangeMod)))
+    {
+        time_point<steady_clock> check_state = steady_clock::now();
+        cout << "running test " << test_name << endl;
 
-    ofstream diff_file;
-    string diff_name = diff_path + "diff-" + test_name;
-    diff_file.open(diff_name, std::fstream::out | std::fstream::app);
-
-    cout << "running test " << test_name << endl;
-
-    // make sure the log is empty, turn off logging.
-    // we don't need undo logging here.
-    // TODO: make a separate function for turning off and clearing the log
-
-    fd_ioctl = open("/dev/ioctl_dummy", 0);
-    if (fd_ioctl < 0) {
-        perror("Unable to open IOCTL device");
-        log << "Unable to open IOCTL device; is logger module loaded?" << endl;
-        ret = fd_ioctl;
-        passed = false;
-        goto async_out;
-    }
-    ret = ioctl(fd_ioctl, LOGGER_LOG_OFF, NULL);
-    if (ret < 0) {
-        perror("ioctl");
-        log << "Error turning off logging" << endl;
-        close(fd_ioctl);
-        passed = false;
-        goto async_out;
-    }
-    ret = ioctl(fd_ioctl, LOGGER_FREE_LOG, NULL);
-    if (ret < 0) {
-        perror("ioctl");
-        log << "Error freeing log via IOCTL" << endl;
-        close(fd_ioctl);
-        passed = false;
-        goto async_out;
-    }
-    close(fd_ioctl);
-
-    // // clear dmesg logs so we can look at them for errors without scanning the 
-    // // entire thing from boot and past tests
-    // command = "dmesg -C";
-    // system(command.c_str());
-
-    ret = mount_replay();
-    if (ret != 0) {
-        // if it fails to mount here, that's an error!
-        perror("mount");
-        diff_file << "File system is unmountable" << endl;
-        test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
-        test_info.PrintResults(log, test_name );
-        diff_file.close();
-        return false;
-    }
-
-    // now iterate over the mods and perform checks
-    // checks on sync file systems use an index variable to keep track of 
-    // where we are in the workload, but since we only crash at the end here,
-    // we'll iterate over the whole thing
-    for (unsigned int i = 0; i < mods_.size(); i++) {
-        mod = mods_[i];
         path = mod.path;
-        if (mod.mod_type == DiskMod::kFsyncMod) {
-            // compare files at the fsynced path between the crashed state 
-            // and the oracle
-            ret = oracle_state.check_generic(path, diff_file, log, true);
-            if (!ret) {
-                passed = false;
-                goto async_out;
-            }
-        } else if (mod.mod_type == DiskMod::kSyncMod) {
-            // compare the entire disk
-            ret = oracle_state.check_disk_contents(replay_mount_point, replay_device_path, diff_file, log);
-            if (!ret) {
-                passed = false;
-                goto async_out;
-            }
-        } else if (mod.mod_type == DiskMod::kDataMod || 
-            mod.mod_type == DiskMod::kSyncFileRangeMod) {
-            ret = oracle_state.check_file_contents_range(path, mod.file_mod_location, mod.file_mod_len, diff_file, log);
-            if (!ret) {
-                passed = false;
-                goto async_out;
-            }
+
+        ofstream diff_file;
+        string diff_name = diff_path + "diff-" + test_name;
+        diff_file.open(diff_name, std::fstream::out | std::fstream::app);
+
+        // make sure the log is empty, turn off logging.
+        // we don't need undo logging here.
+        // TODO: make a separate function for turning off and clearing the log
+
+        fd_ioctl = open("/dev/ioctl_dummy", 0);
+        if (fd_ioctl < 0) {
+            perror("Unable to open IOCTL device");
+            log << "Unable to open IOCTL device; is logger module loaded?" << endl;
+            ret = fd_ioctl;
+            passed = false;
+            goto async_out;
         }
-    }
+        ret = ioctl(fd_ioctl, LOGGER_LOG_OFF, NULL);
+        if (ret < 0) {
+            perror("ioctl");
+            log << "Error turning off logging" << endl;
+            close(fd_ioctl);
+            passed = false;
+            goto async_out;
+        }
+        ret = ioctl(fd_ioctl, LOGGER_FREE_LOG, NULL);
+        if (ret < 0) {
+            perror("ioctl");
+            log << "Error freeing log via IOCTL" << endl;
+            close(fd_ioctl);
+            passed = false;
+            goto async_out;
+        }
+        // turn on logging with undo mode for the replay device
+        ret = ioctl(fd_ioctl, LOGGER_UNDO_ON, NULL);
+        if (ret < 0) {
+            perror("ioctl");
+            log << "Error turning on undo mode" << endl;
+            passed = false;
+            goto async_out;
+        }
+        ret = ioctl(fd_ioctl, LOGGER_LOG_ON, NULL);
+        if (ret < 0) {
+            perror("ioctl");
+            log << "Error turning on logging" << endl;
+            passed = false;
+            goto async_out;
+        }
 
-    ret = make_files(replay_mount_point, diff_file);
-    if (!ret) {
-        passed = false;
-        goto async_out;
-    }
+        // // clear dmesg logs so we can look at them for errors without scanning the 
+        // // entire thing from boot and past tests
+        // command = "dmesg -C";
+        // system(command.c_str());
 
-    ret = delete_files(replay_mount_point, diff_file);
-    if (!ret) {
-        passed = false;
-        goto async_out;
-    }
-
-    ret = umount(replay_mount_point.c_str());
-    if (ret != 0) {
-        // if it fails, sleep for a second to give it time to finish up, then try again
-        sleep(2);
-        ret = umount(replay_mount_point.c_str());
+        ret = mount_replay();
         if (ret != 0) {
-            perror("unmount");
+            // if it fails to mount here, that's an error!
+            perror("mount replay");
+            diff_file << "File system is unmountable" << endl;
+            test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
+            test_info.PrintResults(log, test_name );
             diff_file.close();
             return false;
         }
-    }
 
-    elapsed = duration_cast<milliseconds>(steady_clock::now() - check_state);
-    log << "time to test crash state: " << elapsed.count() << endl;
+        // now iterate over the mods and perform checks
+        // if there are multiple (f)(data)sync calls, we want to start from the 
+        // last one we checked
+        // for (unsigned int i = 0; i < mods_.size(); i++) {
+        //     mod = mods_[i];
+        //     path = mod.path;
+            if (mod.mod_type == DiskMod::kFsyncMod) {
+                // compare files at the fsynced path between the crashed state 
+                // and the oracle
+                ret = oracle_state.check_generic(path, diff_file, log, true);
+                if (!ret) {
+                    passed = false;
+                    goto async_out;
+                }
+            } else if (mod.mod_type == DiskMod::kSyncMod) {
+                // compare the entire disk
+                ret = oracle_state.check_disk_contents(replay_mount_point, replay_device_path, diff_file, log);
+                if (!ret) {
+                    passed = false;
+                    goto async_out;
+                }
+            } else if (mod.mod_type == DiskMod::kDataMod || 
+                mod.mod_type == DiskMod::kSyncFileRangeMod) {
+                ret = oracle_state.check_file_contents_range(path, mod.file_mod_location, mod.file_mod_len, diff_file, log);
+                if (!ret) {
+                    passed = false;
+                    goto async_out;
+                }
+            }
+        // }
 
-async_out:
-    diff_file.close();
-
-    if (passed) {
-        cout << "passed, removing diff file" << endl;
-        ret = remove(diff_name.c_str());
-        if (ret < 0) {
-            return ret;
+        ret = make_files(replay_mount_point, diff_file);
+        if (!ret) {
+            passed = false;
+            goto async_out;
         }
-        return 0;
-    } else {
-        test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
-        test_info.PrintResults(log, test_name );
-        return -1;
+
+        ret = delete_files(replay_mount_point, diff_file);
+        if (!ret) {
+            passed = false;
+            goto async_out;
+        }
+
+        ret = umount(replay_mount_point.c_str());
+        if (ret != 0) {
+            // if it fails, sleep for a bit to give it time to finish up, then try again
+            sleep(3);
+            ret = umount(replay_mount_point.c_str());
+            if (ret != 0) {
+                perror("unmount");
+                goto async_out;
+            }
+        }
+
+        sync();
+
+        ret = ioctl(fd_ioctl, LOGGER_LOG_OFF, NULL);
+        if (ret < 0) {
+            perror("ioctl");
+            log << "Error turning off logging" << endl;
+            passed = false;
+            goto async_out;
+        }
+        ret = ioctl(fd_ioctl, LOGGER_UNDO_OFF, NULL);
+        if (ret < 0) {
+            perror("ioctl");
+            log << "Error turning off undo mode" << endl;
+            passed = false;
+            goto async_out;
+        }
+
+        close(fd_ioctl);
+
+        ret = play_undo_log(fd_replay, log);
+        if (ret < 0) {
+            passed = false;
+            goto async_out;
+        }
+
+        elapsed = duration_cast<milliseconds>(steady_clock::now() - check_state);
+        log << "time to test crash state: " << elapsed.count() << endl;
+async_out:
+        close(fd_ioctl);
+        diff_file.close();
+
+        if (passed) {
+            cout << "passed, removing diff file" << endl;
+            ret = remove(diff_name.c_str());
+            if (ret < 0) {
+                return ret;
+            }
+            return 0;
+        } else {
+            test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
+            test_info.PrintResults(log, test_name );
+            return -1;
+        }
+
     }
+    return 0;
 }
 
 // TODO: this is not used and most likely does not work correctly. remove it entirely? or fix it?
@@ -1969,7 +2027,7 @@ bool Tester::run_check(string test_name, ofstream& log, int checkpoint, bool sys
         sleep(2);
         ret = umount(replay_mount_point.c_str());
         if (ret != 0) {
-            perror("unmount");
+            perror("unmount replay");
             diff_file.close();
             return false;
         }
@@ -2050,8 +2108,6 @@ int Tester::play_undo_log(int fd_replay, ofstream& log) {
     // FILE* base_fptr;
     int fd_base;
 
-    cout << "PLAY UNDO LOG" << endl;
-
     int fd_ioctl = open("/dev/ioctl_dummy", 0);
     if (fd_ioctl < 0) {
         perror("Unable to open IOCTL device");
@@ -2065,6 +2121,55 @@ int Tester::play_undo_log(int fd_replay, ofstream& log) {
         close(fd_ioctl);
         return fd_base;
     }
+
+    new_op = (struct write_op*)malloc(sizeof(struct write_op));
+    if (new_op == NULL) {
+        perror("malloc");
+        close(fd_ioctl);
+        close(fd_base);
+        return -ENOMEM;
+    }
+    new_op->data = NULL;
+    new_op->next = NULL;
+    new_op->prev = NULL;
+
+    new_op->metadata = (struct op_metadata*)malloc(sizeof(struct op_metadata));
+    if (new_op->metadata == NULL) {
+        perror("malloc");
+        free(new_op);
+        close(fd_ioctl);
+        close(fd_base);
+        return -ENOMEM;
+    }
+    ioctl_val = ioctl(fd_ioctl, LOGGER_GET_OP, new_op->metadata);
+    if (ioctl_val < 0) {
+        // perror ("error in LOGGER_GET_OP 2");
+        close(fd_ioctl);
+        close(fd_base);
+        undo_log.clear();
+        fsync(fd_replay);
+        // return ioctl_val;
+        return 0;
+    }
+
+    // we don't log SFENCES in the undo log, so everything will have data
+    new_op->data = malloc(new_op->metadata->len);
+    if (new_op->data == NULL) {
+        perror("malloc");
+        close(fd_ioctl);
+        close(fd_base);
+        return -ENOMEM;
+    }
+    memset(new_op->data, 0, new_op->metadata->len);
+    offset = new_op->metadata->dst - replay_pm_start;
+    
+    ret = pread(fd_base, new_op->data, new_op->metadata->len, offset);
+
+    // add the entry to the undo log
+    undo_log.push_back(new_op);
+
+    // go to the next log entry
+    ioctl_val = ioctl(fd_ioctl, LOGGER_NEXT_OP, NULL);
 
     while (ioctl_val == 0) {
         new_op = (struct write_op*)malloc(sizeof(struct write_op));

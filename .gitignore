@@ -4,3 +4,5 @@ crashStatesLog
 vmshare-*
 stderr
 stdout
+run_changes
+syscall_result_test

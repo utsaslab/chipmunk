@@ -106,8 +106,6 @@ const int kCoverFd = kOutPipeFd - kMaxThreads;
 const int kCoverSize = 256 << 10;
 const int kFailStatus = 67;
 
-const unsigned long replay_pm_start = 0x108000000; // TODO: make this command line arg or get it dynamically
-
 // Logical error (e.g. invalid input program), use as an assert() alternative.
 // If such error happens 10+ times in a row, it will be detected as a bug by syz-fuzzer.
 // syz-fuzzer will fail and syz-manager will create a bug for this.
@@ -261,7 +259,8 @@ static std::string fs_module;
 static std::string FS;
 
 static unsigned long pm_start = 0x100000000;
-static unsigned long pm_size =  0x7ffffff;
+const unsigned long replay_pm_start = 0x108000000; // TODO: make this command line arg or get it dynamically
+static unsigned long pm_size = 0x7ffffff;
 
 
 typedef intptr_t(SYSCALLAPI* syscall_t)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t);
