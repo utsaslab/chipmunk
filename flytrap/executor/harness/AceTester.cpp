@@ -52,7 +52,7 @@ AceTester::AceTester(string p, string r, string m, string rm, unsigned long star
     head = 0;
     tail = 0;
     replay_pm_start = replay_pm;
-    base_replay_path = "base_replay.img";
+    base_replay_path = "/tmp/base_replay.img";
     // TODO: save this somewhere else
     diff_path = "/root/tmpdir/logs/diffs/";
     crashStateLogOut = std::ofstream("/root/tmpdir/crashStatesLog", std::ios_base::app);

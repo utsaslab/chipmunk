@@ -88,6 +88,24 @@ CM_DAX_SEQ1_OUT = \
 		$(foreach TEST, $(CM_DAX_SEQ1), \
 			$(BUILD_DIR)/tests/dax_seq1/$(TEST))
 
+CM_DAX_SEQ2_EXCLUDE = base.cpp
+CM_DAX_SEQ2 = \
+		$(patsubst %.cpp, %.so, \
+			$(filter-out $(CM_DAX_SEQ2_EXCLUDE), \
+					$(notdir $(wildcard $(CURDIR)/executor/tests/dax_seq2/*.cpp))))
+CM_DAX_SEQ2_OUT = \
+		$(foreach TEST, $(CM_DAX_SEQ2), \
+			$(BUILD_DIR)/tests/dax_seq2/$(TEST))
+
+CM_DAX_SEQ3_EXCLUDE = base.cpp
+CM_DAX_SEQ3 = \
+		$(patsubst %.cpp, %.so, \
+			$(filter-out $(CM_DAX_SEQ3_EXCLUDE), \
+					$(notdir $(wildcard $(CURDIR)/executor/tests/dax_seq3/*.cpp))))
+CM_DAX_SEQ3_OUT = \
+		$(foreach TEST, $(CM_DAX_SEQ3), \
+			$(BUILD_DIR)/tests/dax_seq3/$(TEST))
+
 GO := go
 HOSTGO := go
 # By default, build all Go binaries as static. We don't need cgo and it is
@@ -222,6 +240,12 @@ seq3_tests: \
 
 dax_seq1_tests: \
 	$(CM_DAX_SEQ1_OUT)
+
+dax_seq2_tests: \
+	$(CM_DAX_SEQ2_OUT)
+
+dax_seq3_tests: \
+	$(CM_DAX_SEQ3_OUT)
 
 loggers:
 ifneq ("$(BUILDOS)", "$(NATIVEBUILDOS)")
@@ -586,6 +610,30 @@ $(CM_SEQ3_OUT): $(BUILD_DIR)/tests/seq3/%.so : \
 
 $(CM_DAX_SEQ1_OUT): $(BUILD_DIR)/tests/dax_seq1/%.so : \
 		executor/tests/dax_seq1/%.cpp \
+		$(BUILD_DIR)/tests/BaseTestCase.o \
+		$(BUILD_DIR)/user_tools/src/actions.o \
+		$(BUILD_DIR)/user_tools/src/wrapper.o \
+		$(BUILD_DIR)/user_tools/src/workload.o \
+		$(BUILD_DIR)/utils/DiskMod.o \
+		$(BUILD_DIR)/results/DataTestResult.o
+	mkdir -p $(@D)
+	$(GPP) $(GOPTS) $(CFLAGS) $(GOTPSSO) $(XATTR_DEF_FLAG) -Wl,-soname,$(notdir $@) \
+		-o $@ $^
+
+$(CM_DAX_SEQ2_OUT): $(BUILD_DIR)/tests/dax_seq2/%.so : \
+		executor/tests/dax_seq2/%.cpp \
+		$(BUILD_DIR)/tests/BaseTestCase.o \
+		$(BUILD_DIR)/user_tools/src/actions.o \
+		$(BUILD_DIR)/user_tools/src/wrapper.o \
+		$(BUILD_DIR)/user_tools/src/workload.o \
+		$(BUILD_DIR)/utils/DiskMod.o \
+		$(BUILD_DIR)/results/DataTestResult.o
+	mkdir -p $(@D)
+	$(GPP) $(GOPTS) $(CFLAGS) $(GOTPSSO) $(XATTR_DEF_FLAG) -Wl,-soname,$(notdir $@) \
+		-o $@ $^
+
+$(CM_DAX_SEQ3_OUT): $(BUILD_DIR)/tests/dax_seq3/%.so : \
+		executor/tests/dax_seq3/%.cpp \
 		$(BUILD_DIR)/tests/BaseTestCase.o \
 		$(BUILD_DIR)/user_tools/src/actions.o \
 		$(BUILD_DIR)/user_tools/src/wrapper.o \
