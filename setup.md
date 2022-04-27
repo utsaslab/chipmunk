@@ -19,6 +19,8 @@ From now on we assume that the kernel source directory is at `flytrap/vmshare/li
 
 If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' are not compatible`, make sure that you have installed gcc-8 and run `sudo update-alternatives --install /usr/bin/gcc gcc  /usr/bin/gcc-8 1`.
 
+**NOTE:** Compiling FlyTrap involves building some kernel modules against the kernel you will run them on. The kernel must be compiled before compiling FlyTrap.
+
 ## 3. Setting up VMs
 1. `cd` to `flytrap/syzkaller/tools/` and run the `create-image.sh` script. This will create a VM image called stretch.img and a public and private key for ssh-ing into the VMs. Move stretch.img into the top-level `flytrap/` directory and the keys to `~/.ssh/`. 
 2. Boot the VM with the 5.1.0+ kernel and emulated PM. A script that boots the VM with the suggested arguments is provided at `boot-vm.sh`. The VM is set up for passwordless root access; log in with username `root`. It should not ask for a password.
