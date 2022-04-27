@@ -1,21 +1,21 @@
 {
 	"target": "linux/amd64",
 	"http": "0.0.0.0:80", 
-	"workdir": "/home/hayley/flytrap/flytrap/workdir",
-	"kernel_obj": "/home/hayley/flytrap/vmshare/linux-5.1/",
-	"image": "/home/hayley/flytrap/stretch.img",
-	"sshkey": "/home/hayley/.ssh/stretch.id_rsa",
-	"syzkaller": "/home/hayley/flytrap/flytrap",
+	"workdir": "/home/cc/flytrap/flytrap/workdir",
+	"kernel_obj": "/home/cc/flytrap/vmshare/linux-5.1/",
+	"image": "/home/cc/flytrap/stretch.img",
+	"sshkey": "/home/cc/.ssh/stretch.id_rsa",
+	"syzkaller": "/home/cc/flytrap/flytrap",
 	"procs": 1,
 	"sandbox":"none",
 	"type": "qemu",
 	"crash_consistency": true,
 	"capture_mount_cov": true,
-	"filesystem": "ext4",
+	"filesystem": "xfs",
 	"logger": "/logger-ext4.ko",
 	"tester": "syz",
 	"dashboard_only": false,
-        "tester_dir": "/home/hayley/",
+        "tester_dir": "/home/cc/",
 	"cover": true,
         "module": true,
         "restart": true,
@@ -26,9 +26,9 @@
 	"enable_syscalls": [ "open","write","rename","unlink","ftruncate","close","link","mkdir","rmdir","fallocate","fsync","fdatasync","sync"],
 	"vm": {
 		"count": 1,
-		"kernel": "/home/hayley/flytrap/vmshare/linux-5.1/arch/x86/boot/bzImage",
-		"share_dir": "/home/hayley/flytrap/vmshare/",
+		"kernel": "/home/cc/flytrap/vmshare/linux-5.1/arch/x86/boot/bzImage",
+		"share_dir": "/home/cc/flytrap/vmshare/",
 		"cpu": 1,
-		"mem": 4096
+		"mem": 8192
 	}
 }

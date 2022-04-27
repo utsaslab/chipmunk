@@ -537,6 +537,10 @@ int main(int argc, char** argv)
 	if (FS.compare("ext4") == 0 || FS.compare("xfs") == 0) {
 		reorder = false;
 	}
+	debug("LOGGER: %s\n", logger.c_str());
+	if (FS.compare("xfs") == 0) {
+		logger = "/logger-ext4.ko";
+	}
 
 	// clean up leftover state
 	// these will fail if nothing is loaded, but that's fine
@@ -830,7 +834,12 @@ int test_loop() {
 	// TODO: automatically set configurations properly if we are using ext4 or xfs
 	if (reloadFS) {
 		//load logger
-		int r = system((std::string("rmmod logger-") + FS + " -f").c_str());
+		int r;
+		if (FS.compare("xfs") == 0) {
+			r = system(std::string("rmmod logger-ext4 -f").c_str());
+		} else {
+			r = system((std::string("rmmod logger-") + FS + " -f").c_str());
+		}
 		if (r < 0) {
 			debug("Failed to remove logger\n");
 		}

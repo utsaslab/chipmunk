@@ -257,7 +257,11 @@ func (cfg *Config) completeBinaries() error {
 
 	FileSystem := strings.ToLower(cfg.FileSystem)
 
-	cfg.FileSystemPath = filepath.Join(cfg.KernelObj, "fs", FileSystem, FileSystem+".ko")
+	if FileSystem == "ext4" || FileSystem == "xfs" {
+		cfg.FileSystemPath = ""
+	} else {
+		cfg.FileSystemPath = filepath.Join(cfg.KernelObj, "fs", FileSystem, FileSystem+".ko")
+	}
 
 	if FileSystem == "nova" {
 		cfg.LoggerObj = targetLogger("logger-nova.ko", cfg.TargetArch)
