@@ -1626,6 +1626,8 @@ int Tester::check_async_crash(int fd_replay, string test_name, ofstream& log) {
     SingleTestInfo test_info;
     test_info.test_num = 0; // TODO: this is wrong. do we have to set this?
 
+    this->crashStateLogOut << endl;
+
     if (mod.return_value >= 0 && 
         (mod.mod_type == DiskMod::kFsyncMod || 
         mod.mod_type == DiskMod::kSyncMod || 
