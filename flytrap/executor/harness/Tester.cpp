@@ -600,12 +600,12 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
         case MARK_SYS_END:
             log << "MARK SYS END" << ", " << new_op->metadata->pid << ", " << new_op->metadata->sys_ret << endl;
             sync(); // make sure the crash state is synced before we test it
-            // if (call_index == 7) {
-            //     string command = "dd if=/dev/pmem1 of=/root/tmpdir/crash.img bs=100M";
-            //     system(command.c_str());
-            //     command = "dd if=/dev/pmem0 of=/root/tmpdir/oracle.img bs=100M";
-            //     system(command.c_str());
-            // }
+            if (call_index == 6) {
+                string command = "dd if=/dev/pmem1 of=/root/tmpdir/crash.img bs=100M";
+                system(command.c_str());
+                command = "dd if=/dev/pmem0 of=/root/tmpdir/oracle.img bs=100M";
+                system(command.c_str());
+            }
             
             if (reorder) {
                 string check_name = test_name + "_mod" + to_string(call_index);
@@ -1626,6 +1626,8 @@ int Tester::check_async_crash(int fd_replay, string test_name, ofstream& log) {
     SingleTestInfo test_info;
     test_info.test_num = 0; // TODO: this is wrong. do we have to set this?
 
+    this->crashStateLogOut << endl;
+
     if (mod.return_value >= 0 && 
         (mod.mod_type == DiskMod::kFsyncMod || 
         mod.mod_type == DiskMod::kSyncMod || 
@@ -1701,36 +1703,37 @@ int Tester::check_async_crash(int fd_replay, string test_name, ofstream& log) {
             return false;
         }
 
-        // now iterate over the mods and perform checks
-        // if there are multiple (f)(data)sync calls, we want to start from the 
-        // last one we checked
-        // for (unsigned int i = 0; i < mods_.size(); i++) {
-        //     mod = mods_[i];
-        //     path = mod.path;
-            if (mod.mod_type == DiskMod::kFsyncMod) {
-                // compare files at the fsynced path between the crashed state 
-                // and the oracle
-                ret = oracle_state.check_generic(path, diff_file, log, true);
-                if (!ret) {
-                    passed = false;
-                    goto async_out;
-                }
-            } else if (mod.mod_type == DiskMod::kSyncMod) {
-                // compare the entire disk
-                ret = oracle_state.check_disk_contents(replay_mount_point, replay_device_path, diff_file, log);
-                if (!ret) {
-                    passed = false;
-                    goto async_out;
-                }
-            } else if (mod.mod_type == DiskMod::kDataMod || 
-                mod.mod_type == DiskMod::kSyncFileRangeMod) {
-                ret = oracle_state.check_file_contents_range(path, mod.file_mod_location, mod.file_mod_len, diff_file, log);
-                if (!ret) {
-                    passed = false;
-                    goto async_out;
-                }
+        // TODO: there appears to be a bug where syncing
+        // 1) opening and closing on fd 1
+        // 2) opening and closing on fd 2 
+        // 3) unlinking
+        // 4) opening and writing on fd 3
+        // 5) fsync/fdatasync on fd 1 or 2
+        // causes problems. sync() rather than f(data)sync, or using fd 3, is fine.
+        // I think this is a bug in our code, not in the file systems
+        if (mod.mod_type == DiskMod::kFsyncMod) {
+            // compare files at the fsynced path between the crashed state 
+            // and the oracle
+            ret = oracle_state.check_generic(path, diff_file, log, true);
+            if (!ret) {
+                passed = false;
+                goto async_out;
             }
-        // }
+        } else if (mod.mod_type == DiskMod::kSyncMod) {
+            // compare the entire disk
+            ret = oracle_state.check_disk_contents(replay_mount_point, replay_device_path, diff_file, log);
+            if (!ret) {
+                passed = false;
+                goto async_out;
+            }
+        } else if (mod.mod_type == DiskMod::kSyncFileRangeMod) {
+            // TODO: do we ever hit this?
+            ret = oracle_state.check_file_contents_range(path, mod.file_mod_location, mod.file_mod_len, diff_file, log);
+            if (!ret) {
+                passed = false;
+                goto async_out;
+            }
+        }
 
         ret = make_files(replay_mount_point, diff_file);
         if (!ret) {

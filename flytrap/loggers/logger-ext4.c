@@ -132,7 +132,6 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
                 pmem_addr += chunk;
             }
         } else { // record undo entries
-            printk(KERN_ALERT "write pmem undo entries\n");
             while (len) {
                 new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
                 if  (new_op == NULL) {
@@ -533,7 +532,6 @@ static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *
             }
             spin_unlock(&kprobe_lock);
         } else { // undo entry
-            printk(KERN_ALERT "write pmem copy entries\n");
             new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
             if (new_op == NULL) {
                 printk(KERN_ALERT "logger: could not allocate space for log entry\n");
