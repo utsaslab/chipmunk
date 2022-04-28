@@ -1050,10 +1050,11 @@ int DiskState::get_crash_disk_contents(string path, ofstream& diff_file, ofstrea
     return 0;
 }
 
+// TODO: could miss some bugs in the sync file data range case - but do we ever actually do that?
 bool DiskState::check_file_contents_range(string path, int offset, int length, ofstream& diff_file, ofstream& log) {
     int ret;
     struct stat statbuf;
-    FileState crash_state, *oracle_state;
+    FileState crash_state, *oracle_file_state_new, *oracle_file_state_old;
     string relpath;
     path = fix_filepath(path);
     // construct path to the file in the crash state
@@ -1066,16 +1067,25 @@ bool DiskState::check_file_contents_range(string path, int offset, int length, o
 
     // check that the file is still present in the oracle
     // it may have been deleted prior to the fsync/sync/datasync
-    oracle_state = contents[relpath].back();
-    if (!oracle_state->present) {
-        // make sure that the file is not present in the crash state either
-        ret = lstat(crash_path.c_str(), &statbuf);
-        if (ret == 0) {
-            diff_file << crash_path << "exists in the crash state, but " << path << " does not exist in the oracle" << endl;
-            return false;
-        }
-        return true;
+    // int 
+    // oracle_state = contents[relpath].back();
+    // if (!oracle_state->present) {
+    //     // make sure that the file is not present in the crash state either
+    //     ret = lstat(crash_path.c_str(), &statbuf);
+    //     if (ret == 0) {
+    //         diff_file << crash_path << "exists in the crash state, but " << path << " does not exist in the oracle" << endl;
+    //         return false;
+    //     }
+    //     return true;
+    // }
+
+    int num_oracle_states = contents[relpath].size();
+    if (num_oracle_states < 2) {
+        log << "Something is wrong, not enough oracle states for " << path << endl;
+        return false;
     }
+    oracle_file_state_new = contents[relpath][num_oracle_states-1];
+    oracle_file_state_old = contents[relpath][num_oracle_states-2];
 
 
     ret = crash_state.init_crash_file_state(crash_path, diff_file);
@@ -1084,11 +1094,12 @@ bool DiskState::check_file_contents_range(string path, int offset, int length, o
         return false;
     }
 
-    
+    bool match_old = oracle_file_state_old->compare_at_offset(&crash_state, offset, length, diff_file);
+    bool match_new = oracle_file_state_new->compare_at_offset(&crash_state, offset, length, diff_file);
+    cout << "match old: " << match_old << endl;
+    cout << "match new: " << match_new << endl;
 
-    
-
-    if (!oracle_state->compare_at_offset(&crash_state, offset, length, diff_file)) {
+    if (!match_old && !match_new) {
         return false;
     }
 
