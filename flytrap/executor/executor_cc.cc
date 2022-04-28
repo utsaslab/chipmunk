@@ -762,7 +762,6 @@ std::ofstream genLog(std::string test_name)
 	time_t now = time(0);
     char time_st[18];
     strftime(time_st, sizeof(time_st), "%Y%m%d_%H%M%S", localtime(&now));
-    // std::string s = "/root/tmpdir/nova-tester/" + instanceId + "/logs/workloads/" + std::string(time_st) + "-" + test_name + ".log";
     std::string s = "/root/tmpdir/logs/workloads/" + std::string(time_st) + "-" + test_name + ".log";
 	std::ofstream logfile(s);
 	return logfile;
@@ -818,9 +817,15 @@ int test_loop() {
 	test_name = test_name + "_" + instanceId;
 	debug("TEST NAME: %s\n", test_name.c_str());
 	int shouldCheckpoint = 0;
-	std::ofstream log = genLog(test_name);
+	// std::ofstream log = genLog(test_name);
 	waitres = 0;
 	checkpt = false;
+
+	time_t now = time(0);
+    char time_st[18];
+    strftime(time_st, sizeof(time_st), "%Y%m%d_%H%M%S", localtime(&now));
+    std::string s = "/root/tmpdir/logs/workloads/" + std::string(time_st) + "-" + test_name + ".log";
+	std::ofstream log(s);
 
 
 	std::string fs_type;
@@ -1104,7 +1109,7 @@ int test_loop() {
 	if (mountCov)
 		syz_tester->collect_cover = true;
 	time_point<steady_clock> replay_start = steady_clock::now();
-    ret = syz_tester->replay(log, shouldCheckpoint, test_name, false, reorder);
+    ret = syz_tester->replay(log, shouldCheckpoint, test_name, false, reorder, s);
 
 	time_point<steady_clock> replay_end = steady_clock::now();
     milliseconds elapsed = duration_cast<milliseconds>(replay_end - replay_start);

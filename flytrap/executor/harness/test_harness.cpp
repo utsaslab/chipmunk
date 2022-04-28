@@ -532,7 +532,7 @@ int main(int argc, char* argv[]) {
 
     time_point<steady_clock> replay_start = steady_clock::now();
 
-    ret = tester->replay(logfile, checkpoint, test_name, make_trace, reorder);
+    ret = tester->replay(logfile, checkpoint, test_name, make_trace, reorder, s);
     if (ret != 0) {
         perror("replay");
         logfile << "Error replaying writes, error code " << ret << endl;
@@ -598,7 +598,6 @@ int main(int argc, char* argv[]) {
     if (verbose) {
         printf("Cleaning up\n");
     }
-
     tester->cleanup(logfile);
     tester->test_unload_class();
     logfile.close();

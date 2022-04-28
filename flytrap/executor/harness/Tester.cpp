@@ -137,12 +137,13 @@ void Tester::free_queue(vector<struct write_op*> &q) {
     q.clear();
 }
 
-int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_trace, bool reorder) {
+int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_trace, bool reorder, string log_name) {
     int fd_replay;
     int fd;
     int checkpoint_count = 0;
     ofstream trace_file;
     int ret;
+    bool error = false;
     string filename;
     string replay_name = replay_device_path;
 
@@ -246,27 +247,17 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
 
     sfence_count = 0;
     while (head != NULL) {
-        ret = process_log_entry(fd_replay, fd, checkpoint, checkpoint_count, log, test_name, trace_file, make_trace, reorder, oracle_diff_file);
+        ret = process_log_entry(fd_replay, fd, checkpoint, checkpoint_count, log, test_name, trace_file, make_trace, reorder, oracle_diff_file, log_name);
         if (ret != 0) {
-            error_in_oracle = true;
+            error = true;
             break;
         }
     }
 
-    // is this necessary?
-    // if (!reorder) {
-    //     log << "CHECK ASYNC CRASH" << endl;
-    //     // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
-    //     // and we don't want to provide full reordering - we only want to crash after sync calls
-    //     ret = check_async_crash(fd_replay, test_name, log);
-    //     if (ret < 0) {
-    //         return ret;
-    //     }
-    // }
-
     oracle_diff_file.close();
-    if (!error_in_oracle) {
+    if (!error) {
         unlink(diff_file_path.c_str());
+        unlink(log_name.c_str());
     }
 
     if (make_trace) {
@@ -283,7 +274,6 @@ int Tester::replay(ofstream& log, int checkpoint, string test_name, bool make_tr
     }
 
     unmount_fs();
-
     return 0;
 }
 
@@ -486,7 +476,8 @@ int Tester::get_write_log(int fd, ofstream &log, int checkpoint, bool reorder) {
 }
 
 int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkpoint_count, 
-    ofstream& log, string test_name, ofstream& trace_file, bool make_trace, bool reorder, ofstream& oracle_diff_file) {
+    ofstream& log, string test_name, ofstream& trace_file, bool make_trace, bool reorder, 
+    ofstream& oracle_diff_file, string log_name) {
     int ret;
     bool passed = true;
     struct write_op* new_op;
@@ -505,7 +496,8 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
     // check the metadata type to determine what to do with the log entry
     switch(new_op->metadata->type) {
         case SFENCE:
-            log << "SFENCE, " << new_op->metadata->pid << endl;
+            if (reorder)
+                log << "SFENCE, " << new_op->metadata->pid << endl;
             // if there haven't been any writes since the last sfence,
             // we don't have to do anything
             if (unordered_write && reorder) {
@@ -535,7 +527,8 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
             }
             break;
         case CLWB:
-            log << "CLWB " << std::hex << new_op->metadata->dst << std::dec << ", " << new_op->metadata->len << ", " << new_op->metadata->likely_data << ", " << new_op->metadata->pid << endl;
+            if (reorder)
+                log << "CLWB " << std::hex << new_op->metadata->dst << std::dec << ", " << new_op->metadata->len << ", " << new_op->metadata->likely_data << ", " << new_op->metadata->pid << endl;
             if (new_op->metadata->likely_data == 1) {
                 epoch_data_writes.push_back(new_op);
             }
@@ -543,7 +536,9 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
             unordered_write = true;
             break;
         case NT:
-            log << "NT, " << std::hex << new_op->metadata->dst << ", " << std::dec << new_op->metadata->len << ", " << new_op->metadata->likely_data << ", " << new_op->metadata->pid << endl;
+            // don't print out all the nt stores for ext4/xfs, there are too many
+            if (reorder)
+                log << "NT, " << std::hex << new_op->metadata->dst << ", " << std::dec << new_op->metadata->len << ", " << new_op->metadata->likely_data << ", " << new_op->metadata->pid << endl;
             unordered_write = true;
             write_queue.push_back(new_op);
             break;
@@ -559,7 +554,7 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                 log << "CHECK ASYNC CRASH" << endl;
                 // in this case, we are testing an FS like ext4 dax or xfs dax with weaker crash consistency guarantees
                 // and we don't want to provide full reordering - we only want to crash after sync calls
-                ret = check_async_crash(fd_replay, test_name, log);
+                ret = check_async_crash(fd_replay, test_name, log, log_name);
                 if (ret < 0) {
                     return ret;
                 }
@@ -600,12 +595,12 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
         case MARK_SYS_END:
             log << "MARK SYS END" << ", " << new_op->metadata->pid << ", " << new_op->metadata->sys_ret << endl;
             sync(); // make sure the crash state is synced before we test it
-            if (call_index == 6) {
-                string command = "dd if=/dev/pmem1 of=/root/tmpdir/crash.img bs=100M";
-                system(command.c_str());
-                command = "dd if=/dev/pmem0 of=/root/tmpdir/oracle.img bs=100M";
-                system(command.c_str());
-            }
+            // if (call_index == 6) {
+            //     string command = "dd if=/dev/pmem1 of=/root/tmpdir/crash.img bs=100M";
+            //     system(command.c_str());
+            //     command = "dd if=/dev/pmem0 of=/root/tmpdir/oracle.img bs=100M";
+            //     system(command.c_str());
+            // }
             
             if (reorder) {
                 string check_name = test_name + "_mod" + to_string(call_index);
@@ -620,7 +615,7 @@ int Tester::process_log_entry(int fd_replay, int fd, int checkpoint, int& checkp
                 // when a (f)(data)sync call has been made
                 // TODO: check for that and only perform checks when necessary
                 string check_name = test_name + "_mod" + to_string(call_index);
-                ret = check_async_crash(fd_replay, check_name, log);
+                ret = check_async_crash(fd_replay, check_name, log, log_name);
                 if (ret < 0) {
                     cout << "check async crash state < 0 in mark sys end" << endl;
                     return ret;
@@ -1617,7 +1612,7 @@ int Tester::check_crash_state(int fd_replay, string test_name, ofstream& log, in
  * we can probably disable the management of the base replay device when this type 
  * of file system is being tested; would improve performance a bit
  */
-int Tester::check_async_crash(int fd_replay, string test_name, ofstream& log) {
+int Tester::check_async_crash(int fd_replay, string test_name, ofstream& log, string log_name) {
     int ret, fd_ioctl;
     milliseconds elapsed;
     string path, command;
@@ -1790,8 +1785,12 @@ async_out:
         diff_file.close();
 
         if (passed) {
-            cout << "passed, removing diff file" << endl;
+            cout << "passed, removing log files" << endl;
             ret = remove(diff_name.c_str());
+            if (ret < 0) {
+                return ret;
+            }
+            ret = remove(log_name.c_str());
             if (ret < 0) {
                 return ret;
             }
