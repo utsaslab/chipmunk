@@ -1652,7 +1652,8 @@ def main():
         # OperationSet = ['creat', 'mkdir', 'falloc', 'write', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'mmapwrite', 'symlink', 'rmdir']
         # OperationSet = ['creat', 'mkdir', 'falloc', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'symlink', 'rmdir']
         OperationSet = ['creat', 'mkdir', 'falloc', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'rmdir']
-
+    if int(num_ops) == 3:
+        OperationSet = ['dwrite', 'link', 'unlink', 'rename']
 
     # This is basically the list of possible paramter options for each file-system operation. For example, if the fileset has 4 files and the op is creat, then there are 4 parameter options to creat. We log it just to get an estimate of the increase in the options as we expand the file set.
     for i in OperationSet:
