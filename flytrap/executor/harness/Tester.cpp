@@ -1338,7 +1338,7 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                 if (mod.mod_type == DiskMod::kDataMetadataMod && mod.mod_opts == DiskMod::kTruncateOpt) {
                     call_index++;
                     if (mod.return_value >= 0) {
-                        cout << "truncate " << mod.path << " at " << call_index << endl;
+                        cout << "truncate " << mod.path << " at " << call_index << " to size " << mod.file_mod_len << endl;
                         syscall_list += "truncate,";
                         ret = truncate(mod.path.c_str(), mod.file_mod_len);
                         if (ret < 0) {
@@ -1360,6 +1360,32 @@ int Tester::find_disk_mod(struct syscall_record sr, ofstream& log, ofstream& ora
                             test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
                             test_info.PrintResults(log, test_name );
                             return ret;
+                        }
+                        // update links for this file
+                        ret = lstat(mod.path.c_str(), &file_stat);
+                        set<string> linked_files;
+                        if (ret >= 0) {
+                            int ino = file_stat.st_ino;
+                            if (oracle_state.inum_to_files.find(ino) != oracle_state.inum_to_files.end() && !oracle_state.inum_to_files[ino].empty()) {
+                                linked_files = oracle_state.inum_to_files[ino].back();
+                            }
+                        }
+                        for (set<string>::iterator it = linked_files.begin(); it != linked_files.end(); it++) {
+                            if (*it != paths.relative_path) {
+                                struct paths ino_paths;
+                                ret = oracle_state.get_paths(device_mount_point + "/" + *it, ino_paths, log);
+                                if (ret < 0) {
+                                    cout << "error on linked path " << device_mount_point + "/" + *it << endl;
+                                    test_info.data_test.SetError(fs_testing::tests::DataTestResult::kAutoCheckFailed);
+                                    test_info.PrintResults(log, test_name );
+                                    goto out;
+                                }
+                                ret = oracle_state.add_file_state(ino_paths, false, false, false, false, log, oracle_diff_file);
+                                if (ret < 0) {
+                                    log << "failed updating state for " << ino_paths.relative_path << endl;
+                                    return ret;
+                                }
+                            }
                         }
                     }
                     mod_index = i;

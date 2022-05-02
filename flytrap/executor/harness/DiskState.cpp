@@ -119,7 +119,6 @@ int DiskState::add_file_state_from_fd(struct paths paths, bool fsync, bool fdata
     return 0;
 }
 
-// TODO: need to be more careful about when we add parent states....
 int DiskState::add_file_state(struct paths paths, bool creat, bool del, bool fsync, bool fdatasync, ofstream& log, ofstream& diff_file) {
     int ret, ino;
     assert(paths.canonical_path.substr(0, mount_point.length()) == mount_point);
