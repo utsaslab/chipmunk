@@ -10,6 +10,7 @@
 #include "../tests/BaseTestCase.h"
 #include "../results/TestSuiteResult.h"
 #include "../ioctl.h"
+#include "../tester_defs.h"
 #include "DiskState.h"
 
 #define CACHELINE_SIZE 64
@@ -106,6 +107,10 @@ public:
     std::vector<std::vector<FILE*> > fptr_map;
 
     bool collect_cover;
+    bool collect_mount_cover;
+    uint32_t* output_data;
+    uint32_t* output_pos;
+    thread_t* th;
 
 protected:
 

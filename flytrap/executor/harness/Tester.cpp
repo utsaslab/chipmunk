@@ -23,6 +23,7 @@
 
 #include "Tester.h"
 #include "DiskState.h"
+#include "../cov_filter_2.h"
 
 namespace fs_testing {
 
@@ -33,6 +34,8 @@ using std::chrono::duration_cast;
 using std::chrono::milliseconds;
 using std::chrono::time_point;
 using fs_testing::utils::DiskMod;
+
+const int kMaxOutput = 16 << 22;
 
 int Tester::mount_fs(bool init) {
     int ret;
@@ -80,12 +83,184 @@ int Tester::mount_fs(bool init) {
     return 0;
 }
 
+static void cover_reset(cover_t* cov)
+{
+	*(uint64*)cov->data = 0;
+}
+
+static void cover_collect(cover_t* cov)
+{
+	cov->size = *(uint64*)cov->data;
+}
+
+uint32_t* write_output(uint32_t v, uint32_t* output_pos, uint32_t* output_data)
+{
+    if (output_pos < output_data || (char*)output_pos >= (char*)output_data + kMaxOutput)
+		failmsg("output overflow", "pos=%p region=[%p:%p]",
+			output_pos, output_data, (char*)output_data + kMaxOutput);
+    // debug("output pos 32: %p %u\n", output_pos, v);
+	*output_pos = v;
+    output_pos++;
+    // debug("output pos 32: %p %u\n", output_pos, v);
+	return output_pos;
+}
+
+uint32_t* write_output_64(uint64_t v, uint32_t* output_pos, uint32_t* output_data)
+{
+	if (output_pos < output_data || (char*)(output_pos + 1) >= (char*)output_data + kMaxOutput)
+		failmsg("output overflow", "pos=%p region=[%p:%p]",
+			output_pos, output_data, (char*)output_data + kMaxOutput);
+    // debug("output pos 64: %p %llu\n", output_pos, v);
+	*(uint64*)output_pos = v;
+	output_pos += 2;
+	return output_pos;
+}
+
+static uint32 syzhash(uint32 a)
+{
+	a = (a ^ 61) ^ (a >> 16);
+	a = a + (a << 3);
+	a = a ^ (a >> 4);
+	a = a * 0x27d4eb2d;
+	a = a ^ (a >> 15);
+	return a;
+}
+
+const uint32 dedup_table_size = 8 << 10;
+uint32 dedup_table[dedup_table_size];
+
+// Poorman's best-effort hashmap-based deduplication.
+// The hashmap is global which means that we deduplicate across different calls.
+// This is OK because we are interested only in new signals.
+static bool dedup(uint32 sig)
+{
+	for (uint32 i = 0; i < 4; i++) {
+		uint32 pos = (sig + i) % dedup_table_size;
+		if (dedup_table[pos] == sig)
+			return true;
+		if (dedup_table[pos] == 0) {
+			dedup_table[pos] = sig;
+			return false;
+		}
+	}
+	dedup_table[sig % dedup_table_size] = sig;
+	return false;
+}
+
+static bool use_cover_edges(uint32 pc)
+{
+	return true;
+}
+
+static bool use_cover_edges(uint64 pc)
+{
+#if defined(__i386__) || defined(__x86_64__)
+	// Text/modules range for x86_64.
+	if (pc < 0xffffffff80000000ull || pc >= 0xffffffffff000000ull) {
+		printf("got bad pc: 0x%llx\n", pc);
+		exit(0);
+	}
+#endif
+	return true;
+}
+
+template <typename cover_data_t>
+void write_coverage_signal(Tester* t, cover_t* cov, bool flag_collect_cover, bool flag_dedup_cover) {
+	// Write out feedback signals.
+	// Currently it is code edges computed as xor of two subsequent basic block PCs.
+    // debug("OUTPUT POS: %p\n", output_pos);
+	cover_data_t* cover_data = ((cover_data_t*)cov->data) + 1;
+	uint32 nsig = 0;
+	cover_data_t prev_pc = 0;
+	bool prev_filter = true;
+    // debug("REPLAY COVERAGE SIZE: %u\n", cov->size);
+    // debug("OUTPUT POS: %p\n", output_pos);
+    // debug("OUTPUT DATA: %p\n", output_data);
+	for (uint32 i = 0; i < cov->size; i++) {
+		cover_data_t pc = cover_data[i];
+		uint32 sig = pc;
+		if (use_cover_edges(pc))
+			sig ^= syzhash(prev_pc);
+		bool filter = coverage_filter(pc);
+		// Ignore the edge only if both current and previous PCs are filtered out
+		// to capture all incoming and outcoming edges into the interesting code.
+		bool ignore = !filter && !prev_filter;
+		prev_pc = pc;
+		prev_filter = filter;
+		if (ignore || dedup(sig))
+			continue;
+        if (sig == 0) {
+            debug("SIG IS 0\n");
+        }
+        if (sig == 1 || sig == 2) {
+            debug("SIG IS ONE OF OUR MARKERS\n");
+        }
+		t->output_pos = write_output(sig, t->output_pos, t->output_data);
+        // debug("output pos write coverage: %p\n", output_pos);
+		nsig++;
+	}
+    debug("WROTE SIG: %d\n", nsig);
+	// Write out number of signals.
+    if (nsig > 0) {
+	    t->output_pos = write_output((uint32_t) 1, t->output_pos, t->output_data);
+        debug("WROTE COVER MARKER: %p\n", t->output_pos);
+    }
+    debug("OUTPUT POS: %p %d\n", t->output_pos, flag_collect_cover);
+
+	if (!flag_collect_cover) {
+        if (nsig > 0) 
+            t->output_pos = write_output((uint32_t) 2, t->output_pos, t->output_data);
+		return;
+    }
+	// Write out real coverage (basic block PCs).
+	uint32 cover_size = cov->size;
+	if (flag_dedup_cover) {
+		cover_data_t* end = cover_data + cover_size;
+		std::sort(cover_data, end);
+		cover_size = std::unique(cover_data, end) - cover_data;
+	}
+    debug("COVER SIZE: %u\n", cover_size);
+
+	// Truncate PCs to uint32 assuming that they fit into 32-bits.
+	// True for x86_64 and arm64 without KASLR.
+	for (uint32 i = 0; i < cover_size; i++) {
+        if (cover_data[i] == 0) {
+            debug("COVER 0\n");
+        }
+		t->output_pos = write_output(cover_data[i], t->output_pos, t->output_data);
+    }
+	// write_output_64((cover_data_t) 2, output_pos, output_data);
+    if (nsig > 0) {
+        debug("WROTE SIG MARKER: %p\n", t->output_pos);
+        t->output_pos = write_output((uint32_t) 2, t->output_pos, t->output_data);
+    }
+}
+
+void write_completed(uint32_t* output_data, uint32 completed)
+{
+	__atomic_store_n(output_data, completed, __ATOMIC_RELEASE);
+}
+
+void write_call_output(Tester* t, thread_t* th, bool is64,  bool flag_cover, bool flag_dedup) {
+	cover_collect(&th->mount_cov);
+    debug("IS 64 %d\n", is64);
+	if (is64)
+		write_coverage_signal<uint64>(t, &th->mount_cov, flag_cover, flag_dedup);
+	else
+		write_coverage_signal<uint32>(t, &th->mount_cov, flag_cover, flag_dedup);
+	debug("OUTPUT DATA: %p, OUTPUT POS: %p\n", t->output_data, t->output_pos);
+    write_completed(t->output_data, 0);
+}
+
 int Tester::mount_replay() {
     int ret;
+    if (collect_cover && this->collect_mount_cover)
+        cover_reset(&((this->th)->mount_cov));
     ret = mount(replay_device_path.c_str(), replay_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
-    if (ret != 0) {
+    if (collect_cover && this->collect_mount_cover)
+        write_call_output(this, this->th, true,  this->collect_cover, true);
+    if (ret != 0)
         return ret;
-    }
     return 0;
 }
 
