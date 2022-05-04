@@ -20,12 +20,11 @@ local_checkpoint
 
 # run
 mkdir A 0777
-mkdir AC 0777
-open ACbar O_RDWR|O_CREAT 0777
-close ACbar
-rename ACbar bar
-open ACbar O_RDWR|O_CREAT 0777
-unlink ACbar
-fsync ACbar
-checkpoint 1
-close ACbar
+opendir A 0777
+close A
+rename A AC
+mkdir B 0777
+opendir B 0777
+fsync B
+checkpoint 0
+close B

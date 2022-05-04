@@ -74,31 +74,31 @@ namespace fs_testing {
 				}
 
 
-				int fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_Afoo < 0 ) { 
-					cm_->CmClose( fd_Afoo); 
+				int fd_bar = cm_->CmOpen(bar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_bar < 0 ) { 
+					cm_->CmClose( fd_bar); 
 					return errno;
 				}
 
 
-				if ( cm_->CmLink (Afoo_path.c_str() , ACbar_path.c_str() ) < 0){ 
+				if ( cm_->CmLink (bar_path.c_str() , ACbar_path.c_str() ) < 0){ 
 					return errno;
 				}
 
 
-				int fd_Abar = cm_->CmOpen(Abar_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_Abar < 0 ) { 
-					cm_->CmClose( fd_Abar); 
+				int fd_ACbar = cm_->CmOpen(ACbar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_ACbar < 0 ) { 
+					cm_->CmClose( fd_ACbar); 
 					return errno;
 				}
 
 
-				if ( cm_->CmUnlink(Abar_path.c_str() ) < 0){ 
+				if ( cm_->CmUnlink(ACbar_path.c_str() ) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmFsync( fd_Abar) < 0){ 
+				if ( cm_->CmFsync( fd_ACbar) < 0){ 
 					return errno;
 				}
 
@@ -108,16 +108,16 @@ namespace fs_testing {
 				}
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
-					return 1;
+					return 0;
 				}
 
 
-				if ( cm_->CmClose ( fd_Afoo) < 0){ 
+				if ( cm_->CmClose ( fd_bar) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmClose ( fd_Abar) < 0){ 
+				if ( cm_->CmClose ( fd_ACbar) < 0){ 
 					return errno;
 				}
 

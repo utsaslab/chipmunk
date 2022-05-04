@@ -71,7 +71,13 @@ namespace fs_testing {
 				}
 
 
-				if ( fsetxattr( fd_foo, "user.xattr1", "val1 ", 4, 0 ) < 0){ 
+				if ( cm_->CmWriteData ( fd_foo, 0, 32768) < 0){ 
+					cm_->CmClose( fd_foo); 
+					return errno;
+				}
+
+
+				if ( cm_->CmTruncate (foo_path.c_str(), 0) < 0){ 
 					return errno;
 				}
 
@@ -91,7 +97,7 @@ namespace fs_testing {
 				}
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
-					return 1;
+					return 0;
 				}
 
 

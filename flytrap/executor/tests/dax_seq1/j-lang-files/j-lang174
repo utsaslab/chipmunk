@@ -20,7 +20,9 @@ local_checkpoint
 
 # run
 open foo O_RDWR|O_CREAT 0777
-write foo 0 32768
-mmapwrite foo 32768 32768
-checkpoint 1
+link foo bar
+opendir test 0777
+fsync test
+checkpoint 0
 close foo
+close test

@@ -23,4 +23,4 @@ open foo O_RDWR|O_CREAT 0777
 write foo 0 32768
 dwrite foo 0 8192
 sync
-checkpoint 1
+checkpoint 0

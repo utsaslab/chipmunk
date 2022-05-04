@@ -56,6 +56,12 @@ public:
     // bool check_files(utils::DiskMod mod, std::ofstream& diff_file, std::ofstream& log);
     bool check_files(utils::DiskMod mod, std::map<std::string, std::map<int, int> > path_fd_map, std::map<int, int> fd_ino_map, std::ofstream& diff_file, std::ofstream& log);
     bool check_file(std::string path, std::set<std::string> skip_files, std::set<std::string> linked_files, std::ofstream& diff_file, std::ofstream& log);
+
+
+    bool check_disk_contents(std::string crash_mount_path, std::string crash_dev_path, std::ofstream& diff_file, std::ofstream& log);
+    int get_crash_disk_contents(std::string path, std::ofstream& diff_file, std::ofstream& log);
+    bool check_file_contents_range(std::string path, int offset, int length, std::ofstream& diff_file, std::ofstream& log);
+
 };
 
 }

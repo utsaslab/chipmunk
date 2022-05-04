@@ -23,5 +23,5 @@ mkdir A 0777
 open Afoo O_RDWR|O_CREAT 0777
 write Afoo 0 32768
 sync
-checkpoint 1
+checkpoint 0
 close Afoo

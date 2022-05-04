@@ -298,3 +298,47 @@ bool FileState::compare(FileState* compare_state, ofstream& diff_file) {
     }
     return true;
 }
+
+// based on crashmonkey's compare_file_contents
+bool FileState::compare_at_offset(FileState* compare_state, int offset, int len, ofstream& diff_file) {
+    string oracle_path = path;
+    string crash_path = compare_state->path;
+    char oracle_buf[len + 1];
+    char crash_buf[len + 1];
+    int ret;
+
+    ifstream oracle_f(oracle_path, std::ios::binary);
+    ifstream crash_f(crash_path, std::ios::binary);
+
+    if (!oracle_f) {
+        diff_file << "Error opening input file stream " << oracle_path << endl;;
+        return false;
+    } 
+    if (!crash_f) {
+        diff_file << "Error opening input file stream " << crash_path << endl;
+        return false;
+    }
+
+    oracle_f.seekg(offset, ifstream::beg);
+    crash_f.seekg(offset, ifstream::beg);
+
+    oracle_f.read(oracle_buf, len);
+    crash_f.read(crash_buf, len);
+
+    oracle_f.close();
+    crash_f.close();
+
+    oracle_buf[len] = '\0';
+    crash_buf[len] = '\0';
+
+    ret = strcmp(oracle_buf, crash_buf);
+    if (ret == 0) {
+        return true;
+    }
+
+    diff_file << "Content mismatch in " << path << endl;
+    diff_file << "Offset " << offset << ", length " << len << endl;
+    diff_file << oracle_path << " has " << oracle_buf << endl;
+    diff_file << crash_path << " has " << crash_buf << endl;
+    return false;
+}

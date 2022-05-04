@@ -21,8 +21,9 @@ local_checkpoint
 # run
 open foo O_RDWR|O_CREAT 0777
 write foo 0 32768
-opendir test 0777
-fsync test
-checkpoint 1
+open bar O_RDWR|O_CREAT 0777
+unlink bar
+fsync bar
+checkpoint 0
 close foo
-close test
+close bar

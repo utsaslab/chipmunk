@@ -76,12 +76,13 @@ namespace fs_testing {
 				}
 
 
-				if ( fsetxattr( fd_Afoo, "user.xattr1", "val1 ", 4, 0 ) < 0){ 
+				if ( cm_->CmWriteData ( fd_Afoo, 0, 32768) < 0){ 
+					cm_->CmClose( fd_Afoo); 
 					return errno;
 				}
 
 
-				if ( removexattr(Afoo_path.c_str() , "user.xattr1") < 0){ 
+				if ( cm_->CmTruncate (Afoo_path.c_str(), 2500) < 0){ 
 					return errno;
 				}
 
@@ -108,7 +109,7 @@ namespace fs_testing {
 				}
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
-					return 1;
+					return 0;
 				}
 
 

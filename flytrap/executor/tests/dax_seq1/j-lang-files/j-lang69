@@ -24,5 +24,5 @@ write foo 0 32768
 falloc foo 0 30768 5000
 unlink foo
 fsync foo
-checkpoint 1
+checkpoint 0
 close foo

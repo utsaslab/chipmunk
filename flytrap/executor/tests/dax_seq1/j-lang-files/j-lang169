@@ -26,5 +26,5 @@ dwrite Afoo 0 8192
 open Afoo O_RDWR|O_CREAT 0777
 unlink Afoo
 fsync Afoo
-checkpoint 1
+checkpoint 0
 close Afoo

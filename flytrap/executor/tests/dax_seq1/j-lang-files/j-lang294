@@ -19,9 +19,8 @@ local_checkpoint
 
 
 # run
-mkdir A 0777
-open Afoo O_RDWR|O_CREAT 0777
-close Afoo
-remove Afoo
+open foo O_RDWR|O_CREAT 0777
+close foo
+rename foo bar
 sync
-checkpoint 1
+checkpoint 0

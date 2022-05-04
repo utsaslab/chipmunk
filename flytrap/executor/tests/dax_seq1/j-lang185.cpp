@@ -69,48 +69,38 @@ namespace fs_testing {
 				}
 
 
-				int fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_Afoo < 0 ) { 
-					cm_->CmClose( fd_Afoo); 
+				if ( cm_->CmMkdir(AC_path.c_str() , 0777) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmWriteData ( fd_Afoo, 0, 32768) < 0){ 
-					cm_->CmClose( fd_Afoo); 
+				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_foo < 0 ) { 
+					cm_->CmClose( fd_foo); 
 					return errno;
 				}
 
 
-				if ( fallocate( fd_Afoo , 0 , 0 , 8192) < 0){ 
-					cm_->CmClose( fd_Afoo);
-					 return errno;
-				}
-				char *filep_Afoo = (char *) cm_->CmMmap(NULL, 8192 + 0, PROT_WRITE|PROT_READ, MAP_SHARED, fd_Afoo, 0);
-				if (filep_Afoo == MAP_FAILED) {
-					 return -1;
+				if ( cm_->CmLink (foo_path.c_str() , ACbar_path.c_str() ) < 0){ 
+					return errno;
 				}
 
-				int moffset_Afoo = 0;
-				int to_writeAfoo = 8192 ;
-				const char *mtext_Afoo  = "mmmmmmmmmmklmnopqrstuvwxyz123456";
 
-				while (moffset_Afoo < 8192){
-					if (to_writeAfoo < 32){
-						memcpy(filep_Afoo + 0 + moffset_Afoo, mtext_Afoo, to_writeAfoo);
-						moffset_Afoo += to_writeAfoo;
-					}
-					else {
-						memcpy(filep_Afoo + 0 + moffset_Afoo,mtext_Afoo, 32);
-						moffset_Afoo += 32; 
-					} 
+				int fd_bar = cm_->CmOpen(bar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_bar < 0 ) { 
+					cm_->CmClose( fd_bar); 
+					return errno;
 				}
 
-				if ( cm_->CmMsync ( filep_Afoo + 0, 8192 , MS_SYNC) < 0){
-					cm_->CmMunmap( filep_Afoo,0 + 8192); 
-					return -1;
+
+				if ( cm_->CmUnlink(bar_path.c_str() ) < 0){ 
+					return errno;
 				}
-				cm_->CmMunmap( filep_Afoo , 0 + 8192);
+
+
+				if ( cm_->CmFsync( fd_bar) < 0){ 
+					return errno;
+				}
 
 
 				if ( cm_->CmCheckpoint() < 0){ 
@@ -118,11 +108,16 @@ namespace fs_testing {
 				}
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
-					return 1;
+					return 0;
 				}
 
 
-				if ( cm_->CmClose ( fd_Afoo) < 0){ 
+				if ( cm_->CmClose ( fd_foo) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmClose ( fd_bar) < 0){ 
 					return errno;
 				}
 

@@ -74,19 +74,19 @@ namespace fs_testing {
 				}
 
 
-				int fd_ACbar = cm_->CmOpen(ACbar_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_ACbar < 0 ) { 
-					cm_->CmClose( fd_ACbar); 
+				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_foo < 0 ) { 
+					cm_->CmClose( fd_foo); 
 					return errno;
 				}
 
 
-				if ( cm_->CmClose ( fd_ACbar) < 0){ 
+				if ( cm_->CmClose ( fd_foo) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmRemove(ACbar_path.c_str() ) < 0){ 
+				if ( cm_->CmRename (foo_path.c_str() , ACbar_path.c_str() ) < 0){ 
 					return errno;
 				}
 
@@ -108,7 +108,7 @@ namespace fs_testing {
 				}
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
-					return 1;
+					return 0;
 				}
 
 

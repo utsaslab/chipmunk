@@ -19,11 +19,10 @@ local_checkpoint
 
 
 # run
-mkdir A 0777
-open Afoo O_RDWR|O_CREAT 0777
-close Afoo
-unlink Afoo
-opendir A 0777
-fsync A
-checkpoint 1
-close A
+open foo O_RDWR|O_CREAT 0777
+close foo
+remove foo
+opendir test 0777
+fsync test
+checkpoint 0
+close test

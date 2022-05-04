@@ -4,3 +4,6 @@ crashStatesLog
 vmshare-*
 stderr
 stdout
+flytrap/executor/ace/j-lang*
+run_changes
+syscall_result_test

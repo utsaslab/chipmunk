@@ -25,5 +25,5 @@ write Afoo 0 32768
 falloc Afoo FALLOC_FL_PUNCH_HOLE|FALLOC_FL_KEEP_SIZE 32768 32768
 unlink Afoo
 fsync Afoo
-checkpoint 1
+checkpoint 0
 close Afoo

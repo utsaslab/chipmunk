@@ -1185,7 +1185,9 @@ def buildJlang(op_list, length_map, test_type):
             off = str(size-8192)
             lenn = '8192'
         
-        command_str = command_str + off + ' ' + lenn + '\ncheckpoint ' + ret
+        # command_str = command_str + off + ' ' + lenn + '\ncheckpoint ' + ret
+        if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+            command_str = command_str + off + ' ' + lenn + '\ncheckpoint 0'
 
     
 
@@ -1205,7 +1207,9 @@ def buildJlang(op_list, length_map, test_type):
             command_str = command_str + command + ' ' + file.replace('/','')
             log_file_handle.write("command string: " + command_str + "\n")
         else:
-            command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
+            if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+                command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint 0'
+            # command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
         
 
     if command =='fdatasync':
@@ -1215,7 +1219,9 @@ def buildJlang(op_list, length_map, test_type):
             command_str = command_str + command + ' ' + file.replace('/','')
             log_file_handle.write("command string: " + command_str + "\n")
         else:
-            command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
+            if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+                command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint 0'
+            # command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
         
 
 
@@ -1224,7 +1230,9 @@ def buildJlang(op_list, length_map, test_type):
         if test_type == "pm":
             log_file_handle.write("command string: " + command_str + "\n")
         else:
-            command_str = command_str + command + '\ncheckpoint ' + ret
+            if int(ret) == int(num_ops)-1 or int(num_ops) == 1:
+                command_str = command_str + command + '\ncheckpoint 0'
+            # command_str = command_str + command + '\ncheckpoint ' + ret
         
 
     if command == 'none':
@@ -1280,6 +1288,8 @@ def doPermutation(perm, test_type):
         dest_dir = "dax_seq1"
     elif num_ops == "2":
         dest_dir = "dax_seq2"
+    elif num_ops == "3":
+        dest_dir = "dax_seq3"
     
     if nested:
         dest_dir += '_nested'
@@ -1642,7 +1652,8 @@ def main():
         # OperationSet = ['creat', 'mkdir', 'falloc', 'write', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'mmapwrite', 'symlink', 'rmdir']
         # OperationSet = ['creat', 'mkdir', 'falloc', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'symlink', 'rmdir']
         OperationSet = ['creat', 'mkdir', 'falloc', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'rmdir']
-
+    if int(num_ops) == 3:
+        OperationSet = ['dwrite', 'link', 'unlink', 'rename']
 
     # This is basically the list of possible paramter options for each file-system operation. For example, if the fileset has 4 files and the op is creat, then there are 4 parameter options to creat. We log it just to get an estimate of the increase in the options as we expand the file set.
     for i in OperationSet:
@@ -1769,40 +1780,7 @@ def main():
 
 
     # Move the resultant high-level lang files to target directory. We could choose to delete them too. But if we wanted to analyze the core-ops in a workload, looking at this file is an easier way of doing it. Also if you modify the adapter, you can simply supply the directory of j-lang files to convert to cpp. No need to go through the entire generation process.
-    # target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang* {}'
-    
-    # for seq2 workloads, there are too many files to move at once, so do it in a couple of rounds
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang11* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang12* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang1* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang2* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang3* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang4* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang5* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang6* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang7* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang8* {}'
-    subprocess.call(target.format(target_path), shell = True)
-
-    target = 'mv j2-lang* {}' if test_type == "xfstest-concise" else 'mv j-lang9* {}'
+    target = "for file in j-lang*; do mv $file {}; done"
     subprocess.call(target.format(target_path), shell = True)
 
 
