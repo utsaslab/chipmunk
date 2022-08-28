@@ -49,6 +49,9 @@ GOPTS = -std=c++11
 GOTPSSO = -shared -fPIC
 CFLAGS = -g
 
+# Userspace configuration
+USERFS=0
+
 # BUILD_DIR := $(CURDIR)/executor/build
 BUILD_DIR := ./bin/$(TARGETOS)_$(TARGETARCH)
 
@@ -193,6 +196,7 @@ ifneq ("$(NO_CROSS_COMPILER)", "")
 else
 	mkdir -p ./bin/$(TARGETOS)_$(TARGETARCH)
 	g++ -o ./bin/$(TARGETOS)_$(TARGETARCH)/syz-executor_cc$(EXE) executor/executor_cc.cc \
+		executor/user_fs.cpp \
 		executor/harness/Tester.cpp \
 		executor/harness/SyzTester.cpp \
 		executor/harness/FileState.cpp \
@@ -203,7 +207,7 @@ else
 		executor/user_tools/src/actions.cpp \
 		executor/user_tools/src/wrapper.cpp \
 		$(ADDCFLAGS) -Wno-unused-function -Wno-unused-result -Wno-sign-compare -DGOOS_$(TARGETOS)=1 -DGOARCH_$(TARGETARCH)=1 \
-		-DHOSTGOOS_$(HOSTOS)=1 -DGIT_REVISION=\"$(REV)\"
+		-DHOSTGOOS_$(HOSTOS)=1 -DGIT_REVISION=\"$(REV)\" -DUSERFS=$(USERFS)
 endif
 endif
 
