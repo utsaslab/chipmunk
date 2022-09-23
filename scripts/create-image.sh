@@ -168,6 +168,12 @@ echo "syzkaller" | sudo tee $DIR/etc/hostname
 ssh-keygen -f $RELEASE.id_rsa -t rsa -N ''
 sudo mkdir -p $DIR/root/.ssh/
 cat $RELEASE.id_rsa.pub | sudo tee $DIR/root/.ssh/authorized_keys
+# add PM directories
+sudo mkdir -p $DIR/mnt/pmem
+sudo mkdir -p $DIR/mnt/pmem_replay
+sudo mkdir -p $DIR/root/tmpdir
+# set up directory sharing
+echo 'mount -t 9p -o trans=virtio,version=9p2000.L hostshare /root/tmpdir' | sudo tee -a $DIR/root/.profile
 
 # Add perf support
 if [ $PERF = "true" ]; then
@@ -192,3 +198,4 @@ sudo cp -a $DIR/. /mnt/$DIR/.
 sudo umount /mnt/$DIR
 
 mv stretch.id_rsa stretch.id_rsa.pub $HOME/.ssh
+sudo rm -rf chroot

@@ -11,7 +11,7 @@ GOTPSSO = -shared -fPIC
 # BUILD_DIR = $(CURDIR)/build
 BUILD_DIR = $(CURDIR)/../bin/linux_amd64/loggers
 
-MODULES = logger-nova logger-pmfs logger-ext4 logger-duofs logger-winefs
+MODULES = logger-nova logger-pmfs logger-ext4 logger-winefs
 obj-m := $(addsuffix .o, $(MODULES))
 
 # THIS SHOULD BE THE PATH TO YOUR LOCAL LINUX SOURCE

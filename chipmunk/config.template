@@ -1,11 +1,11 @@
 {
 	"target": "linux/amd64",
 	"http": "0.0.0.0:80", 
-	"workdir": "/home/user/flytrap/flytrap/workdir",
-	"kernel_obj": "/home/user/flytrap/vmshare/linux-5.1/",
-	"image": "/home/user/flytrap/stretch.img",
+	"workdir": "/home/user/chipmunk/chipmunk/workdir",
+	"kernel_obj": "/home/user/chipmunk/vmshare/linux-5.1/",
+	"image": "/home/user/chipmunk/stretch.img",
 	"sshkey": "/home/user/.ssh/stretch.id_rsa",
-	"syzkaller": "/home/user/flytrap/flytrap",
+	"syzkaller": "/home/user/chipmunk/chipmunk",
 	"procs": 1,
 	"sandbox":"none",
 	"type": "qemu",
@@ -26,9 +26,9 @@
 	"enable_syscalls": [ "open","write","rename","unlink","ftruncate","close","link","mkdir","rmdir","fallocate"],
 	"vm": {
 		"count": 1,
-		"kernel": "/home/user/flytrap/vmshare/linux-5.1/arch/x86/boot/bzImage",
-		"share_dir": "/home/user/flytrap/vmshare/",
+		"kernel": "/home/user/chipmunk/vmshare/linux-5.1/arch/x86/boot/bzImage",
+		"share_dir": "/home/user/chipmunk/vmshare/",
 		"cpu": 1,
-		"mem": 4096
+		"mem": 8192
 	}
 }
