@@ -36,7 +36,7 @@ TruncateOptions = ['aligned', 'unaligned']
 
 # Set of file-system operations to be used in test generation.
 # We currently support : creat, mkdir, falloc, write, dwrite, link, unlink, remove, rename, fsetxattr, removexattr, truncate, mmapwrite, symlink, fsync, fdatasync, sync
-OperationSet = ['creat', 'mkdir', 'falloc', 'write', 'dwrite','mmapwrite', 'link', 'unlink', 'remove', 'rename', 'fsetxattr', 'removexattr', 'truncate']
+OperationSet = ['creat', 'mkdir', 'falloc', 'write', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'fsetxattr', 'removexattr', 'truncate']
 
 # Because the filenaming convention in the high-level j-lang language 
 # seems to be arbitrary, we hard code the translation here to ensure

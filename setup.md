@@ -15,9 +15,6 @@ If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' a
 1. Run `scripts/create-image.sh` script. This will create a VM image called stretch.img and a public and private key for ssh-ing into the VMs. Move stretch.img into the top-level `chipmunk/` directory and the keys to `~/.ssh/`. 
 
 
-
-
-
 2. Boot the VM with the 5.1.0+ kernel and emulated PM. A script that boots the VM with the suggested arguments is provided at `boot-vm.sh`. The VM is set up for passwordless root access; log in with username `root`. It should not ask for a password.
 3. To confirm that the emulated PM is working correctly, check that `/dev/` contains `pmem0` and `pmem1` devices. 
 4. In the VM, create directories `/root/tmpdir`, `/mnt/pmem`, and `/mnt/pmem_replay`. Chipmunk expects these directories in these exact locations, so don't rename or move them. 

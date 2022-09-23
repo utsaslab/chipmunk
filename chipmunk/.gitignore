@@ -27,5 +27,5 @@ dashboard/app/.gcloudignore
 
 tools/chroot/
 
-config
-cc-config
+./config
+./cc-config

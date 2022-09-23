@@ -22,7 +22,6 @@
 
 #include "Tester.h"
 #include "SyzTester.h"
-#include "../cov_filter_2.h"
 
 namespace fs_testing {
 
@@ -66,7 +65,7 @@ bool flag_collect_cover, bool flag_dedup_cover, thread_t* th, bool mountCov, uns
     this->th = th;
     collect_cover = flag_collect_cover;
     dedup_cover = flag_dedup_cover;
-    this->collect_mount_cov = mountCov;
+    this->collect_mount_cover = mountCov;
     this->instanceId = instanceId;
     this->setup();
     // string log = "/root/tmpdir/nova-tester/" + instanceId +  "/logs/workloads/syztester";
@@ -118,7 +117,7 @@ void SyzTester::setup() {
         closedir(workloadDir);
     } else {
         string makeWorkload = "mkdir -p " + workloads;
-        debug("make workload: %s\n", makeWorkload.c_str());
+        // debug("make workload: %s\n", makeWorkload.c_str());
         string makeDiffs = "mkdir -p " + diffs;
         // string copyBaseImg = "cp /root/tmpdir/nova-tester/code/replay/base.img /root/tmpdir/nova-tester/" + this->instanceId + "/base_replay.img";
 

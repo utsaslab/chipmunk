@@ -43,19 +43,16 @@ AceTester::AceTester(string p, string r, string m, string rm, unsigned long star
     fs = f;
     check_data = d;
     vector<struct write_op*> q;
-    // write_queues.push_back(q); // the first queue in the list is the primary queue
     vector<FILE*> v1;
     fptr_map.push_back(v1);
     mount_opts = o;
     mod_addr = mod;
     num_threads = threads;
-    // captureCoverage = coverage;
     sync_index = 0;
     head = 0;
     tail = 0;
     replay_pm_start = replay_pm;
-    // base_replay_path = "code/replay/base_replay.img";
-    base_replay_path = "base_replay.img";
+    base_replay_path = "/tmp/base_replay.img";
     // TODO: save this somewhere else
     diff_path = "/root/tmpdir/logs/diffs/";
     crashStateLogOut = std::ofstream("/root/tmpdir/crashStatesLog", std::ios_base::app);
@@ -214,6 +211,7 @@ int AceTester::test_run(const int change_fd, const int checkpoint,  std::ofstrea
 //   return SUCCESS;
 // }
 
+// TODO: remove these, they don't do anything
 bool AceTester::test_replay(ofstream& log, int checkpoint, string test_name, bool make_trace, bool reorder) {
     int ret = true;
     // ofstream file;

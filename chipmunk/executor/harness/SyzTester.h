@@ -52,9 +52,6 @@ public:
      int curSys;
     std::vector<std::vector<FILE*> > fptr_map; // TODO: do we still use this?
     bool collect_cover;
-    bool collect_mount_cov;
-    uint32_t* output_data;
-    uint32_t* output_pos;
     std::ofstream logfile;
 
 private:
@@ -64,7 +61,6 @@ private:
     std::string instanceId;
     
     bool dedup_cover;
-    thread_t* th;
 
     int kOutFd;
 

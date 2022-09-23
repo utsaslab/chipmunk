@@ -10,6 +10,7 @@
 #include "../tests/BaseTestCase.h"
 #include "../results/TestSuiteResult.h"
 #include "../ioctl.h"
+#include "../tester_defs.h"
 #include "DiskState.h"
 
 #define CACHELINE_SIZE 64
@@ -59,7 +60,7 @@ public:
 
     void free_queue(std::vector<struct write_op *> &q);
 
-    int replay(std::ofstream &log, int checkpoint, std::string test_name, bool make_trace, bool reorder);
+    int replay(std::ofstream &log, int checkpoint, std::string test_name, bool make_trace, bool reorder, std::string log_name);
 
     // TODO: do we still need these? fuzzer shouldn't, so make them virtual?
     virtual bool test_replay(std::ofstream &log, int checkpoint, std::string test_name, bool make_trace, bool reorder) {return false;};
@@ -69,7 +70,7 @@ public:
 
     int process_log_entry(int fd_replay, int fd, int checkpoint, int &checkpoint_count, std::ofstream &log,
                               std::string test_name, std::ofstream &trace_file, bool make_trace, bool reorder,
-                              std::ofstream& oracle_diff_file);
+                              std::ofstream& oracle_diff_file, std::string log_name);
 
     std::vector <std::vector<struct write_op *>>
         handle_outstanding_writes(std::ofstream &log, std::string test_name);
@@ -80,7 +81,7 @@ public:
                     std::vector <std::vector<struct write_op *>> &combos);
 
 
-    int make_replay(std::string test_name, std::string replay_path, std::string replica_path,
+    int make_replay(std::string test_name, std::string replica_path,
                         std::vector<struct write_op *> writes, std::ofstream &log);
 
     bool run_check(std::string test_name, std::ofstream& log, int checkpoint, bool syscall_finished);
@@ -97,8 +98,8 @@ public:
     bool check_fs_contents2(int checkpoint, std::ofstream& diff_file, std::ofstream& log, bool syscall_finished);
     int make_and_check_crash_states(int fd_replay, int fd, int checkpoint, std::ofstream& log, std::string test_name, std::ofstream& trace_file, bool make_trace, int &mod_index, bool reorder);
     int check_crash_state(int fd_replay, std::string test_name, std::ofstream& log, int checkpoint, bool reorder, bool syscall_finished);
-    // int find_disk_mod(struct syscall_record sr, int mod_index, std::ofstream& log);
     int find_disk_mod(struct syscall_record sr, std::ofstream& log, std::ofstream& oracle_diff_file);
+    int check_async_crash(int fd_replay, std::string test_name, std::ofstream& log, std::string log_name);
 
     std::vector<struct write_op*> write_queue;
     std::vector<struct write_op *> epoch_data_writes;
@@ -106,6 +107,10 @@ public:
     std::vector<std::vector<FILE*> > fptr_map;
 
     bool collect_cover;
+    bool collect_mount_cover;
+    uint32_t* output_data;
+    uint32_t* output_pos;
+    thread_t* th;
 
 protected:
 
@@ -132,7 +137,8 @@ protected:
 
     fs_testing::utils::ClassLoader<fs_testing::tests::BaseTestCase> test_loader;
 
-    std::vector <std::vector<fs_testing::utils::DiskMod>> mods_;
+    // std::vector <std::vector<fs_testing::utils::DiskMod>> mods_;
+    std::vector<fs_testing::utils::DiskMod> mods_;
 
     std::string test_name;
 

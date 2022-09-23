@@ -257,7 +257,11 @@ func (cfg *Config) completeBinaries() error {
 
 	FileSystem := strings.ToLower(cfg.FileSystem)
 
-	cfg.FileSystemPath = filepath.Join(cfg.KernelObj, "fs", FileSystem, FileSystem+".ko")
+	if FileSystem == "ext4" || FileSystem == "xfs" {
+		cfg.FileSystemPath = ""
+	} else {
+		cfg.FileSystemPath = filepath.Join(cfg.KernelObj, "fs", FileSystem, FileSystem+".ko")
+	}
 
 	if FileSystem == "nova" {
 		cfg.LoggerObj = targetLogger("logger-nova.ko", cfg.TargetArch)
@@ -266,8 +270,8 @@ func (cfg *Config) completeBinaries() error {
 		cfg.LoggerObj = targetLogger("logger-pmfs.ko", cfg.TargetArch)
 	} else if FileSystem == "winefs" {
 		cfg.LoggerObj = targetLogger("logger-winefs.ko", cfg.TargetArch)
-	} else if FileSystem == "ext4" {
-		return fmt.Errorf("ext4-dax is not yet supported")
+	} else if FileSystem == "ext4" || FileSystem == "xfs" {
+		cfg.LoggerObj = targetLogger("logger-ext4.ko", cfg.TargetArch)
 	} else if cfg.CrashConsistency {
 		return fmt.Errorf("unrecognized file system %v", cfg.FileSystem)
 	}
@@ -284,7 +288,7 @@ func (cfg *Config) completeBinaries() error {
 	if cfg.CrashConsistency && !osutil.IsExist(cfg.LoggerObj) {
 		return fmt.Errorf("bad config syzkaller param: can't find %v", cfg.LoggerObj)
 	}
-	if cfg.CrashConsistency && !osutil.IsExist(cfg.FileSystemPath) {
+	if cfg.CrashConsistency && FileSystem != "ext4" && FileSystem != "xfs" && !osutil.IsExist(cfg.FileSystemPath) {
 		return fmt.Errorf("bad config syzkaller param: can't find %v", cfg.FileSystemPath)
 	}
 	return nil
