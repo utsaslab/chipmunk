@@ -26,7 +26,7 @@ A brief description of each bug is included below.
 - `NOVA_FORTIS_BUG3`: Not fixed yet(?)
 - `NOVA_FORTIS_BUG4`: Not fixed yet(?)
 - `PMFS_BUG1`: Reproducible with ACE seq1 tests. Occurs because of a logic error where files that were being truncated during a crash are resolved before scanning FS metadata during recovery. This results in an access to lost volatile data, causing a null pointer dereference during recovery. Causes a kernel panic.
-    - Example reproducing test: seq1/j-lang52 (TODO: I THINK! DOUBLE CHECK)
+    - Example reproducing test: seq1/j-lang52
 - `PMFS_BUG2`: TODO: requires seq2.
 - `PMFS_BUG3`: Not fixed yet
 - `PMFS_BUG4`: TODO: requires fuzzer.
