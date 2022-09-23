@@ -6360,7 +6360,11 @@ CONFIG_NOVA_FS=m
 # CONFIG_NOVA_FORTIS_BUG1 is not set
 # CONFIG_NOVA_FORTIS_BUG2 is not set
 # CONFIG_PMFS_BUG1 is not set
+# CONFIG_PMFS_BUG2 is not set
+# CONFIG_PMFS_BUG4 is not set
 # CONFIG_WINEFS_BUG1 is not set
+# CONFIG_WINEFS_BUG2 is not set
+# CONFIG_WINEFS_BUG3 is not set
 # CONFIG_WINEFS_BUG4 is not set
 CONFIG_PMFS=m
 # CONFIG_PMFS_XIP is not set

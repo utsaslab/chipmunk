@@ -77,26 +77,51 @@ config NOVA_BUG8
 config NOVA_FORTIS_BUG1
 	bool "NOVA-Fortis bug 1"
 	help 
-		Inject NOVA-Fortis bug \#1 into the system. TODO: description
+		Inject NOVA-Fortis bug \#1 into the system. Caused by a missing fence that allows updates to primary and backup logs to be reordered incorrectly. 
 
 config NOVA_FORTIS_BUG2
 	bool "NOVA-Fortis bug 2"
 	help
-	  Inject NOVA-Fortis bug \#2 into the system. TODO: description
+		Inject NOVA-Fortis bug \#2 into the system. Caused by incorrect handling of primary and backup 
+		inode logs. Only one log may be initialized after a crash, but both are required to be properly
+		initialized to perform many operations.
 
 config PMFS_BUG1
 	bool "PMFS bug 1"
 	help 
-	  Inject PMFS bug \#1 into the system. TODO: description
+		Inject PMFS bug \#1 into the system. Occurs because of a logic error where files that were being
+		truncated during a crash are resolved before scanning FS metadata during recovery. This results in
+		an access to lost volatile data, causing a null pointer dereference during recovery. Causes a 
+		kernel panic.
+
+config PMFS_BUG2
+	bool "PMFS bug 2"
+	help
+		Inject PMFS bug \#2 into the system. Causes data write to be non-synchronous due to a missing fence.
+
+config PMFS_BUG4
+	bool "PMFS bug 4"
+	help
+		Inject PMFS bug \#4 into the system. Causes lost data when performing non-8-byte-aligned writes due to a bug in the function that flushes edge cache lines.
 
 config WINEFS_BUG1
 	bool "WineFS bug 1"
 	help 
-	  Inject WineFS bug \#1 into the system. TODO: description
+	  Inject WineFS bug \#1 into the system. Caused by an error when accessing per-CPU journals during recovery. Prevents new files from being created or deleted.
+
+config WINEFS_BUG2
+	bool "WineFS bug 2"
+	help 
+		Inject WineFS bug \#3 into the system. Causes data write to be non-synchronous due to a missing fence.
+
+config WINEFS_BUG3
+	bool "WineFS bug 3"
+	help
+		Inject WineFS bug \#3 into the system. Causes lost data when performing non-8-byte-aligned writes due to a bug in the function that flushes edge cache lines.
 
 config WINEFS_BUG4
 	bool "WineFS bug 4"
 	help
-	  Inject WineFS bug \#4 into the system. TODO: description
+	  Inject WineFS bug \#4 into the system. Causes data writes to be not atomic even in strict mode.
 
 endmenu # "NOVA bugs"

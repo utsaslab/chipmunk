@@ -149,9 +149,14 @@ static inline void pmfs_flush_edge_cachelines(loff_t pos, ssize_t len,
 {
 	if (unlikely(pos & 0x7))
 		pmfs_flush_buffer(start_addr, 1, false);
+#ifdef CONFIG_PMFS_BUG4
 	if (unlikely(((pos + len) & 0x7) && ((pos & (CACHELINE_SIZE - 1)) !=
 			((pos + len) & (CACHELINE_SIZE - 1)))))
 		pmfs_flush_buffer(start_addr + len, 1, false);
+#else 
+	if (unlikely(((pos + len) & 0x7) && len > 0))
+		pmfs_flush_buffer(start_addr + len, 1, false);
+#endif
 }
 
 // static inline size_t memcpy_to_nvmm(char *kmem, loff_t offset,
@@ -293,7 +298,11 @@ static ssize_t pmfs_file_write_fast(struct super_block *sb, struct inode *inode,
 		pmfs_memcpy_atomic(&pi->i_ctime, &c_m_time, 8);
 		pmfs_memlock_inode(sb, pi);
 	}
+#ifdef CONFIG_PMFS_BUG2	
 	pmfs_flush_buffer(pi, 1, true);
+#else 
+	pmfs_flush_buffer(pi, 1, false);
+#endif
 	return ret;
 }
 

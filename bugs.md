@@ -1,6 +1,6 @@
 # Bugs found by Chipmunk
 
-The version of Linux in `vmshare/` has been modified with kernel configuration options that allow bugs that were found by Chipmunk and fixed to be re-added to the kernel. Each bug configuration option looks like `CONFIG_FSNAME_BUGX` where `FSNAME` is the name of the affected file system and `X` is a number identifying the bug. Bugs can be injected into the file systems by setting their corresponding config option to `Y` and re-compiling. Using `make menuconfig`, these options can be found under `File Systems > PM file system bugs`.
+The version of Linux in `vmshare/` has been modified with kernel configuration options that allow bugs that were found by Chipmunk and fixed to be re-added to the kernel. Each bug configuration option looks like `CONFIG_FSNAME_BUGX` where `FSNAME` is the name of the affected file system and `X` is a number identifying the bug. Bugs can be injected into the file systems by setting their corresponding config option to `Y` and re-compiling. Using `make menuconfig`, these options can be found under `File Systems > PM file system bugs`. Bugs that are not fixed do not have a corresponding config option.
 
 Note that multiple bugs may be built into the kernel at a time, but some bugs cause kernel panics. The consequence of each bug is listed below and in the `help` section of its configuration option in `make menuconfig`. If a bug that causes a kernel panic is compiled together with multiple other bugs from the same file system, the panicking bug may be hit first, preventing other bugs from being reproduced. 
 
@@ -23,16 +23,18 @@ A brief description of each bug is included below.
     - Example reproducing test: seq1/j-lang26
 - `NOVA_FORTIS_BUG2`: Reproducible with ACE seq1 tests. Caused by incorrect handling of primary and backup inode logs. Initializing these logs is not atomic with respect to crashes. If the system crashes with the primary initialized and the backup uninitialized, operations that require adding to the logs fail.
     - Example reproducing test: seq1/j-lang10
-- `NOVA_FORTIS_BUG3`: Not fixed yet(?)
-- `NOVA_FORTIS_BUG4`: Not fixed yet(?)
+- `NOVA_FORTIS_BUG3`: Reproducible with ACE seq1 tests. Not yet fixed. Caused by NOVA attempting and failing to free blocks that are already free. Causes error messages to appear in `dmesg`; confirmed by NOVA maintainers as a bug. 
+- `NOVA_FORTIS_BUG4`: Reproducible with ACE seq1 tests. Not yet fixed. Causes unrepairable data corruption on some setups. 
 - `PMFS_BUG1`: Reproducible with ACE seq1 tests. Occurs because of a logic error where files that were being truncated during a crash are resolved before scanning FS metadata during recovery. This results in an access to lost volatile data, causing a null pointer dereference during recovery. Causes a kernel panic.
     - Example reproducing test: seq1/j-lang52
-- `PMFS_BUG2`: TODO: requires seq2.
-- `PMFS_BUG3`: Not fixed yet
-- `PMFS_BUG4`: TODO: requires fuzzer.
+- `PMFS_BUG2`: Reproducible with ACE seq2. Caused by a missing fence during a data write. Can cause a file data write to be persisted non-sychronously.
+- `PMFS_BUG3`: Reproducible with ACE seq1 tests. Not fixed. Causes a KASAN report during remount.
+- `PMFS_BUG4`: Reproducible with the fuzzer. Causes lost data when performing non-8-byte-aligned writes due to a bug in the function that flushes edge cache lines.
 - `WINEFS_BUG1`: Reproducible with ACE seq1 tests. Occurs because journals are not read correctly during recovery, resulting in corrupted directories or incorrect link counts.
     - Example reproducing test: seq1/j-lang1
-- `WINEFS_BUG2`: TODO: requires seq2
-- `WINEFS_BUG3`: TODO: requires fuzzer
+- `WINEFS_BUG2`: Reproducible with ACE seq2. Caused by a missing fence during a data write. Can cause a file data write to be persisted non-sychronously.
+- `WINEFS_BUG3`: Reproducible with fuzzer. Causes lost data when performing non-8-byte-aligned writes due to a bug in the function that flushes edge cache lines.
 - `WINEFS_BUG4`: Reproducible with ACE seq1 tests. Writing to a file may not be atomic with respect to crashes in strict mode. 
     - Example reproducing test: seq1/j-lang11
+
+The current artifact does not support testing SplitFS; details about these bugs will be added in the future.

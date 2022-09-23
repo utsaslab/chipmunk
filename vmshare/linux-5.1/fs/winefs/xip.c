@@ -178,7 +178,12 @@ static inline void pmfs_flush_edge_cachelines(loff_t pos, ssize_t len,
 {
 	if (unlikely(pos & 0x7))
 		pmfs_flush_buffer(start_addr, 1, false);
+#ifdef CONFIG_WINEFS_BUG3
+	if (unlikely(((pos + len) & 0x7) && ((pos & (CACHELINE_SIZE - 1)) !=
+			((pos + len) & (CACHELINE_SIZE - 1)))))
+#else
 	if (unlikely(((pos + len) & 0x7) && len > 0))
+#endif
 		pmfs_flush_buffer(start_addr + len, 1, false);
 }
 
@@ -292,7 +297,11 @@ static ssize_t pmfs_file_write_fast(struct super_block *sb, struct inode *inode,
 	size_t copied, ret = 0, offset;
 	timing_t memcpy_time;
 	bool strong_guarantees = PMFS_SB(sb)->s_mount_opt & PMFS_MOUNT_STRICT;
+#ifdef CONFIG_WINEFS_BUG2
+	bool barrier = false;
+#else
 	bool barrier = strong_guarantees ? true : false;
+#endif
 
 	offset = pos & (sb->s_blocksize - 1);
 
