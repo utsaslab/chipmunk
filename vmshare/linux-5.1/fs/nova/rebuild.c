@@ -367,8 +367,11 @@ static void nova_rebuild_handle_write_entry(struct super_block *sb,
 		 */
 		nova_assign_write_entry(sb, sih, entry, entryc, false);
 	}
-
+#ifdef CONFIG_NOVA_BUG7
+	if (entryc->trans_id >= sih->trans_id) {
+#else
 	if (entryc->trans_id >= reb->trans_id) {
+#endif
 		nova_rebuild_file_time_and_size(sb, reb,
 					entryc->mtime, entryc->mtime,
 					entryc->size);
@@ -500,8 +503,10 @@ static int nova_rebuild_file_inode_tree(struct super_block *sb,
 
 	ret = nova_rebuild_inode_finish(sb, pi, sih, reb, curr_p);
 	sih->i_blocks = sih->i_size >> data_bits;
+#ifndef CONFIG_NOVA_BUG7
 	if (sih->i_size % (1 << data_bits) > 0)
 		++sih->i_blocks;
+#endif
 
 out:
 //	nova_print_inode_log_page(sb, inode);
@@ -850,8 +855,10 @@ int nova_restore_snapshot_table(struct super_block *sb, int just_init)
 
 	ret = nova_rebuild_inode_finish(sb, pi, sih, reb, curr_p);
 	sih->i_blocks = sih->i_size >> data_bits;
+#ifndef CONFIG_NOVA_BUG7
 	if (sih->i_size % (1 << data_bits) > 0)
 		++sih->i_blocks;
+#endif
 
 out:
 //	nova_print_inode_log_page(sb, inode);

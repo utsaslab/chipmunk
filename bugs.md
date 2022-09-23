@@ -16,9 +16,9 @@ A brief description of each bug is included below.
     - Example reproducing test: seq1/j-lang36
 - `NOVA_BUG5`: Reproducible with ACE seq1 tests. Caused by excluding information about whether a file has been moved to a new directory from log entries. Causes a file do become inaccesible if the system crashes during `rename()`. In Chipmunk, this manifests as a bug report that the renamed file's parent directory cannot be deleted, even though Chipmunk recursively deletes all deletable files during its consistency checks.
     - Example reproducing test: seq1/j-lang39
-- `NOVA_BUG6`: TODO. requires seq2
-- `NOVA_BUG7`: TODO. requires fuzzer
-- `NOVA_BUG8`: TODO. requires fuzzer. Not fixed yet.
+- `NOVA_BUG6`: Reproducible with ACE seq2 tests. Caused by unsafe in-place update. Causes a target's link count to be incorrect after a crash.
+- `NOVA_BUG7`: Reproducible only with fuzzer. Caused by incorrect log entry ordering when a file is modified via multiple file descriptors. Causes incorrect file size and potential data loss after a crash.
+- `NOVA_BUG8`: Reproducible only with fuzzer. Caused by incorrect block number calcluation logic after modifying a file with `ftruncate` and `fallocate` via multiple file descriptors. Causes data loss.
 - `NOVA_FORTIS_BUG1`: Reproducible with ACE seq1 tests. Caused by a missing fence that allows updates to primary and backup logs to be reordered incorrectly. Can manifest in multiple ways, depending on the crashing operation. For example, a crash during `unlink` or `rmdir` may leave a directory in a corrupted state where the `..` dentry is missing. 
     - Example reproducing test: seq1/j-lang26
 - `NOVA_FORTIS_BUG2`: Reproducible with ACE seq1 tests. Caused by incorrect handling of primary and backup inode logs. Initializing these logs is not atomic with respect to crashes. If the system crashes with the primary initialized and the backup uninitialized, operations that require adding to the logs fail.

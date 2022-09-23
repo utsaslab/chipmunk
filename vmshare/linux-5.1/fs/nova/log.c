@@ -714,7 +714,7 @@ static int nova_can_inplace_update_lcentry(struct super_block *sb,
 	 * in inconsistent state (number of links) in this case.
 	 * Currently, disable inplace update link change entry.
 	 */
-# if 0
+# ifdef CONFIG_NOVA_BUG6
 	u64 last_log = 0;
 	struct nova_link_change_entry *entry = NULL;
 

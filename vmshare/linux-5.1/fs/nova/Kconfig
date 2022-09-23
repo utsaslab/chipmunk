@@ -53,6 +53,27 @@ config NOVA_BUG5
 	  associated with dentries are not included in journal entries. It leaves a file 
 	  inaccessible and corrupted if the system crashes while renaming a file.
 
+config NOVA_BUG6
+	bool "NOVA bug 6"
+	help 
+		Inject NOVA bug \#6 into the system. This bug occurs because link count may be updated
+		in place if there is already a link count change entry in the journal, which is not 
+		crash-safe. It causes link to be non-atomic in this case, leaving a file with an 
+		incorrect link count after a crash.
+
+config NOVA_BUG7
+	bool "NOVA bug 7"
+	help
+		Inject NOVA bug \#7 into the system. This bug occurs because log entries may be read 
+		in an incorrect order after modifying and truncating a file using multiple file 
+		descriptors. It causes incorrect file size and potential data loss after a crash.
+
+config NOVA_BUG8
+	bool "NOVA bug 8"
+	help
+		Inject NOVA bug \#8 into the system. This bug occurs due to incorrect blocknr calculation
+		after using truncate and fallocate on a file with multiple file descriptors. It causes data loss. 
+
 config NOVA_FORTIS_BUG1
 	bool "NOVA-Fortis bug 1"
 	help 
