@@ -1,35 +1,30 @@
 # Setting up Chipmunk
 
-## 1. Dependencies and directory setup
-1. Run the following commands to install and properly set up Chipmunk's dependencies:
-```
-sudo apt-get install build-essential libncurses-dev bison flex libssl-dev libelf-dev gcc-8 g++-8 debootstrap qemu-system python3-pip 
-sudo update-alternatives --install /usr/bin/gcc gcc  /usr/bin/gcc-8 1
-pip3 install progress
-```
-2. Install Golang using the instructions here: https://go.dev/doc/install
-
-## 2. Compiling the kernel
-From now on we assume that the kernel source directory is at `Chipmunk/vmshare/linux-5.1`.
-1. `cd` to `chipmunk/vmshare/linux-5.1`
-2. Set up the kernel to use the `chipmunk/vmshare/linux-5.1/NOVA_CONFIG` as its configuration file. One way to do this and make sure the configuration file is set up properly is to load NOVA_CONFIG in menuconfig and then save it as .config. 
-3. Run `make`
+## 1. Building
+1. Run `scripts/dependencies.sh` to install the dependencies for Chipmunk, Syzkaller, and ACE. 
+2. Install Go: https://go.dev/doc/install
+3. Run `scripts/build_kernel.sh <cores>` to automatically configure and compile the kernel.
 
 ### Troubleshooting
 
-If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' are not compatible`, make sure that you have installed gcc-8 and run `sudo update-alternatives --install /usr/bin/gcc gcc  /usr/bin/gcc-8 1`.
+If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' are not compatible`, install gcc-8 and run `sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 1`.
 
-**NOTE:** Compiling Chipmunk involves building some kernel modules against the kernel you will run them on. The kernel must be compiled before compiling Chipmunk.
+**NOTE:** Compiling Chipmunk involves building some kernel modules against the kernel you will run them on. The kernel must be compiled before Chipmunk can be compiled.
 
-## 3. Setting up VMs
-1. `cd` to `chipmunk/syzkaller/tools/` and run the `create-image.sh` script. This will create a VM image called stretch.img and a public and private key for ssh-ing into the VMs. Move stretch.img into the top-level `chipmunk/` directory and the keys to `~/.ssh/`. 
+## 2. Setting up VMs
+1. Run `scripts/create-image.sh` script. This will create a VM image called stretch.img and a public and private key for ssh-ing into the VMs. Move stretch.img into the top-level `chipmunk/` directory and the keys to `~/.ssh/`. 
+
+
+
+
+
 2. Boot the VM with the 5.1.0+ kernel and emulated PM. A script that boots the VM with the suggested arguments is provided at `boot-vm.sh`. The VM is set up for passwordless root access; log in with username `root`. It should not ask for a password.
 3. To confirm that the emulated PM is working correctly, check that `/dev/` contains `pmem0` and `pmem1` devices. 
 4. In the VM, create directories `/root/tmpdir`, `/mnt/pmem`, and `/mnt/pmem_replay`. Chipmunk expects these directories in these exact locations, so don't rename or move them. 
 5. Add the line `mount -t 9p -o trans=virtio,version=9p2000.L hostshare /root/tmpdir` to `~/.profile` in the VM. This mounts a shared directory between the host and guest. Source the .profile file and `ls ~/tmpdir` to confirm that this works; you should see the kernel source directory there. 
 6. Try loading the NOVA file system module with `insmod tmpdir/linux-5.1/fs/nova/nova.ko` and mount it at `/mnt/pmem` with `mount -t NOVA -o init /dev/pmem0 /mnt/pmem`. This should succeed, and running `df` should show that `/dev/pmem0` is mounted at `/mnt/pmem`. The VM can now be shut down.
 
-## 4. Building and running Chipmunk with Syzkaller
+## 3. Building and running Chipmunk with Syzkaller
 1. `cd` to `chipmunk/` and run `make`.
 2. Create a directory `workdir` in `chipmunk`.
 3. Create a copy of `config.template` named `config` and edit it so that:
@@ -46,7 +41,7 @@ If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' a
 4. Run `sudo ./bin/syz-manager -config config`. To run in debug mode with extra output, add `-debug`. This generates a significant amount of output, so you should redirect the output to files.
 5. As Chipmunk runs, it will create a set of directories with names like `vmshare-#` (one for each VM) and store output from that VM's fuzzing instance there. It also stores some data in `chipmunk/syzkaller/workdir`.
 
-## 5. Building and running manual tests
+## 4. Building and running manual tests
 
 1. Make sure you have compiled Chipmunk
 2. Run `cd chipmunk; cp -r bin/* chipmunk/vmshare/syzkallerBinaries` to copy the binaries for the Chipmunk files into the shared directory. 
@@ -55,7 +50,7 @@ If you encounter this error: `error: '-mindirect-branch' and '-fcf-protection' a
     - By default, execprog tests NOVA. To test a different file system, add the arguments `-fs=<fs name> -fs_path=<absolute path to FS .ko file on the VM> -logger=<absolute path to logger .ko file on the VM>`. If the FS under test is built into the kernel, pass the empty string "" to `-fs_path`.
     - syz-execprog mocks some of the fuzzing infrastructure that the executor expects, but otherwise runs the exact same code as the fuzzer when testing the file system.
 
-## 6. Building and running ACE tests
+## 5. Building and running ACE tests
 1. `cd` to `chipmunk/` and run `make`.
 2. `cd` to `chipmunk/executor/ace`. Run `python3 ace.py -l <seq length> -n false -d false -t <fs type>` to generate tests. The sequence length option can be 1, 2, or 3. The test type options supported by Chipmunk are `pm` and `crashmonkey`. The default option is `crashmonkey`; these tests are placed in `chipmunk/executor/tests/dax_seq#` and should be used only with EXT4-DAX or XFS-DAX. To test NOVA, PMFS, WineFS, or other PM-specific file systems, use the `pm` option. These tests are placed in `chipmunk/executor/tests/seq#`.
 3. Compile tests by running `make <test dir>_tests` where `<test dir>` is the location of the test you'd like to build. For example, compiling seq2 tests generated using `pm` mode would be `make seq2_tests`. Seq1 `pm` tests are compiled along with Chipmunk and don't need to be compiled with a specific command.
