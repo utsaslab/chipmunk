@@ -17,7 +17,7 @@ fi
 
 # Variables affected by options
 ARCH=$(uname -m)
-RELEASE=stretch
+RELEASE=bullseye
 FEATURE=minimal
 SEEK=16320
 PERF=false
@@ -197,5 +197,5 @@ sudo mount -o loop $RELEASE.img /mnt/$DIR
 sudo cp -a $DIR/. /mnt/$DIR/.
 sudo umount /mnt/$DIR
 
-mv stretch.id_rsa stretch.id_rsa.pub $HOME/.ssh
+mv $RELEASE.id_rsa $RELEASE.id_rsa.pub $HOME/.ssh
 sudo rm -rf chroot
