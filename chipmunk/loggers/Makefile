@@ -17,14 +17,14 @@ obj-m := $(addsuffix .o, $(MODULES))
 # THIS SHOULD BE THE PATH TO YOUR LOCAL LINUX SOURCE
 # it must have been built probably
 # TODO: somehow obtain this from the config rather than having it hardcoded here
-KDIR := $(CURDIR)/../../vmshare/linux-5.1/
+KDIR := $(CURDIR)/../../vmshare/linux-6.3/
 # KDIR := $(HOME)/shared/linux-5.1/
 .PHONY: all clean
 
 all: \
 	$(foreach MOD, $(MODULES), $(addsuffix .c, $(MOD))) \
 		$(BUILD_DIR)/Makefile
-	$(MAKE) -C $(KDIR) M=$(BUILD_DIR) src=$(CURDIR) modules
+	$(MAKE) -C $(KDIR) M=$(BUILD_DIR) src=$(CURDIR) LLVM=-14 modules
 	EXTRA_CFLAGS="$(CFLAGS)"
 
 clean: \

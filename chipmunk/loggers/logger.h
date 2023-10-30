@@ -70,7 +70,6 @@ static int set_up_kprobes(unsigned long* kprobe_addrs, struct kprobe_node* kp_he
                 kp_head->kp->addr = (kprobe_opcode_t*)kprobe_addrs[i];
                 kp_head->kp->pre_handler = pre_handler;
                 kp_head->kp->post_handler = post_handler;
-                kp_head->kp->fault_handler = NULL;
 
                 ret = register_kprobe(kp_head->kp);
                 if (ret < 0) {
@@ -96,7 +95,6 @@ static int set_up_kprobes(unsigned long* kprobe_addrs, struct kprobe_node* kp_he
                 new_kp->kp->addr = (kprobe_opcode_t*)kprobe_addrs[i];
                 new_kp->kp->pre_handler = pre_handler;
                 new_kp->kp->post_handler = NULL;
-                new_kp->kp->fault_handler = NULL;
 
                 ret = register_kprobe(new_kp->kp);
                 if (ret < 0) {

@@ -7,12 +7,12 @@
 #include <linux/blkdev.h>
 #include <linux/blk_types.h>
 #include <linux/init.h>
-#include <linux/genhd.h>
 #include <linux/kprobes.h>
 #include <linux/kallsyms.h>
 #include <linux/irqflags.h>
 #include <linux/delay.h>
 #include <linux/uio.h>
+#include <asm/io.h>
 #include "logger.h"
 #include "../executor/ioctl.h"
 
@@ -41,7 +41,6 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
     unsigned int ret, len, off, chunk;
     struct page *page;
     void *mem, *pmem_addr;
-    struct stack_trace trace;
     // add an entry to the write log
     
     if (Log.logging_on && (unsigned long long)(virt_to_phys((void*)regs->di)) >= pm_start && (unsigned long long)(virt_to_phys((void*)regs->di)) < (pm_start+pm_size)) {
@@ -69,12 +68,7 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
                 }
 
                 // save call stack so we can determine where in the FS code the kprobe was hit
-                trace.nr_entries = 0;
-                trace.entries = &(new_op->metadata->trace_entries[0]);
-                trace.max_entries = TRACE_SIZE;
-                trace.skip = TRACE_SKIP;
-                save_stack_trace(&trace);
-                new_op->metadata->nr_entries = trace.nr_entries;
+                new_op->metadata->nr_entries = stack_trace_save(&(new_op->metadata->trace_entries[0]), TRACE_SIZE, TRACE_SKIP);
 
                 // metadata takes a little work to get from write_pmem, but it's better to kprobe 
                 // write_pmem than memcpy_flushcache (what it wraps) because memcpy_flushcache is always 
@@ -102,7 +96,7 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
                 // copy the data to the log
                 // this function ensures that faults are handled correctly when reading data 
                 // that may be coming from user space
-                ret = probe_kernel_read(new_op->data, (void*)new_op->metadata->src, new_op->metadata->len);
+                ret = copy_from_kernel_nofault(new_op->data, (void*)new_op->metadata->src, new_op->metadata->len);
                 if (ret < 0) {
                     kunmap_atomic(mem);
                     kfree(new_op->metadata);
@@ -184,7 +178,7 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
                 // // copy the data to the log
                 // // this function ensures that faults are handled correctly when reading data 
                 // // that may be coming from user space
-                // ret = probe_kernel_read(new_op->data, (void*)new_op->metadata->src, new_op->metadata->len);
+                // ret = copy_from_kernel_nofault(new_op->data, (void*)new_op->metadata->src, new_op->metadata->len);
                 // if (ret < 0) {
                 //     kunmap_atomic(mem);
                 //     kfree(new_op->metadata);
@@ -227,7 +221,6 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
 
 static int __kprobes kp_nvdimm_flush_pre_handler(struct kprobe *p, struct pt_regs *regs) {
     struct write_op* new_op;
-    struct stack_trace trace;
 
     if (Log.logging_on && !Log.undo) {
         new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
@@ -247,12 +240,7 @@ static int __kprobes kp_nvdimm_flush_pre_handler(struct kprobe *p, struct pt_reg
         }
 
         // save call stack so we can determine where in the FS code the kprobe was hit
-        trace.nr_entries = 0;
-        trace.entries = &(new_op->metadata->trace_entries[0]);
-        trace.max_entries = TRACE_SIZE;
-        trace.skip = TRACE_SKIP;
-        save_stack_trace(&trace);
-        new_op->metadata->nr_entries = trace.nr_entries;
+        new_op->metadata->nr_entries = stack_trace_save(&(new_op->metadata->trace_entries[0]), TRACE_SIZE, TRACE_SKIP);
 
         // no data is logged here 
         // just need to take note that this is an SFENCE instruction
@@ -286,7 +274,6 @@ static int __kprobes kp_nvdimm_flush_pre_handler(struct kprobe *p, struct pt_reg
 static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *regs) {
     struct write_op* new_op;
     int ret;
-    struct stack_trace trace;
     unsigned long long mod64, start, len;
     start = (unsigned long long)(virt_to_phys((void*)regs->di));
     if (Log.logging_on && start >= pm_start && start < (pm_start+pm_size)) {
@@ -321,12 +308,7 @@ static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *r
             }
 
             // save call stack so we can determine where in the FS code the kprobe was hit
-            trace.nr_entries = 0;
-            trace.entries = &(new_op->metadata->trace_entries[0]);
-            trace.max_entries = TRACE_SIZE;
-            trace.skip = TRACE_SKIP;
-            save_stack_trace(&trace);
-            new_op->metadata->nr_entries = trace.nr_entries;
+            new_op->metadata->nr_entries = stack_trace_save(&(new_op->metadata->trace_entries[0]), TRACE_SIZE, TRACE_SKIP);
 
             // copy metadata to log entry
             // here, source and destination are the same
@@ -348,7 +330,7 @@ static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *r
             }
 
             // copy the data to the log
-            ret = probe_kernel_read(new_op->data, (void*)regs->di, new_op->metadata->len);
+            ret = copy_from_kernel_nofault(new_op->data, (void*)regs->di, new_op->metadata->len);
             if (ret < 0) {
                 printk(KERN_ALERT "logger: could not read data\n");
                 kprobe_fail = 1;
@@ -399,12 +381,7 @@ static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *r
             }
 
             // save call stack so we can determine where in the FS code the kprobe was hit
-            trace.nr_entries = 0;
-            trace.entries = &(new_op->metadata->trace_entries[0]);
-            trace.max_entries = TRACE_SIZE;
-            trace.skip = TRACE_SKIP;
-            save_stack_trace(&trace);
-            new_op->metadata->nr_entries = trace.nr_entries;
+            new_op->metadata->nr_entries = stack_trace_save(&(new_op->metadata->trace_entries[0]), TRACE_SIZE, TRACE_SKIP);
 
             // copy metadata to log entry
             // here, source and destination are the same
@@ -426,7 +403,7 @@ static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *r
             // }
 
             // // copy the data to the log
-            // ret = probe_kernel_read(new_op->data, (void*)regs->di, new_op->metadata->len);
+            // ret = copy_from_kernel_nofault(new_op->data, (void*)regs->di, new_op->metadata->len);
             // if (ret < 0) {
             //     printk(KERN_ALERT "logger: could not read data\n");
             //     kprobe_fail = 1;
@@ -460,7 +437,6 @@ static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *r
 static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *regs) {
     struct write_op* new_op;
     int ret;
-    struct stack_trace trace;
     struct iov_iter iter;
 
     // TODO: this one might be more correct to be in a loop as well
@@ -486,12 +462,7 @@ static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *
             new_op->metadata->type = NT;
 
             // save call stack so we can determine where in the FS code the kprobe was hit
-            trace.nr_entries = 0;
-            trace.entries = &(new_op->metadata->trace_entries[0]);
-            trace.max_entries = TRACE_SIZE;
-            trace.skip = TRACE_SKIP;
-            save_stack_trace(&trace);
-            new_op->metadata->nr_entries = trace.nr_entries;
+            new_op->metadata->nr_entries = stack_trace_save(&(new_op->metadata->trace_entries[0]), TRACE_SIZE, TRACE_SKIP);
 
             new_op->metadata->len = regs->cx;
             new_op->metadata->dst = regs->dx; 
@@ -508,12 +479,12 @@ static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *
                 goto out;
             }
 
-            ret = probe_kernel_read(&iter, (void*)regs->r8, sizeof(struct iov_iter));
+            ret = copy_from_kernel_nofault(&iter, (void*)regs->r8, sizeof(struct iov_iter));
             if (ret < 0) {
                 kprobe_fail = 1;
                 goto out;
             }
-            ret = copy_from_iter_flushcache(new_op->data, new_op->metadata->len, &iter);
+            ret = _copy_from_iter_flushcache(new_op->data, new_op->metadata->len, &iter);
             if (ret < 0) {
                 kprobe_fail = 1;
                 goto out;
@@ -551,13 +522,7 @@ static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *
             new_op->metadata->type = NT;
 
             // save call stack so we can determine where in the FS code the kprobe was hit
-            trace.nr_entries = 0;
-            trace.entries = &(new_op->metadata->trace_entries[0]);
-            trace.max_entries = TRACE_SIZE;
-            trace.skip = TRACE_SKIP;
-            save_stack_trace(&trace);
-            new_op->metadata->nr_entries = trace.nr_entries;
-
+            new_op->metadata->nr_entries = stack_trace_save(&(new_op->metadata->trace_entries[0]), TRACE_SIZE, TRACE_SKIP);
             new_op->metadata->len = regs->cx;
             new_op->metadata->dst = regs->dx; 
             new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
@@ -573,7 +538,7 @@ static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *
             //     goto out;
             // }
 
-            // ret = probe_kernel_read(&iter, (void*)regs->r8, sizeof(struct iov_iter));
+            // ret = copy_from_kernel_nofault(&iter, (void*)regs->r8, sizeof(struct iov_iter));
             // if (ret < 0) {
             //     kprobe_fail = 1;
             //     goto out;
@@ -651,7 +616,6 @@ static int find_pmem_copy_addrs(void* data, const char* namebuf, struct module* 
 }
 
 static int __init logger_init(void) {
-    struct write_op* first = NULL;
     int ret;
 
     kp_write_pmem_addrs = (unsigned long*)kzalloc(NUM_KPROBE_ADDRS*sizeof(unsigned long), GFP_KERNEL);
@@ -778,7 +742,7 @@ static int __init logger_init(void) {
     // note to self: this device does NOT wrap anything because we can't wrap /dev/pmem0; it's just a standalone dummy device for communication 
     // w/ user processes
     
-    ioctl_dev.ioctl_gd = alloc_disk(1);
+    ioctl_dev.ioctl_gd = blk_alloc_disk(1);
     if (!ioctl_dev.ioctl_gd) {
         printk(KERN_ALERT "logger: failed to allocate gendisk\n");
         unregister_blkdev(major_num, DEVICE_NAME);
@@ -796,23 +760,27 @@ static int __init logger_init(void) {
     ioctl_dev.ioctl_gd->fops = &blkdev_ops;
     strcpy(ioctl_dev.ioctl_gd->disk_name, DEVICE_NAME);
 
-    // get a request queue and set it up
-    ioctl_dev.ioctl_gd->queue = blk_alloc_queue(GFP_KERNEL);
-    if (ioctl_dev.ioctl_gd->queue == NULL) {
-        printk(KERN_ALERT "logger: unable to allocate device request queue\n");
-        del_gendisk(ioctl_dev.ioctl_gd);
-        unregister_blkdev(major_num, DEVICE_NAME);
-        free_kprobe_list(kp_write_pmem_head);
-        free_kprobe_list(kp_nvdimm_flush_head);
-        free_kprobe_list(kp_cache_wb_head);
-        free_addrs();
-        return FAIL;
-    }
-    // TODO: do we have to set a custom queue request function if we won't actually be using the queue?
-    ioctl_dev.ioctl_gd->queue->queuedata = &ioctl_dev;
+    // // get a request queue and set it up
+    // ioctl_dev.ioctl_gd->queue = blk_alloc_queue(GFP_KERNEL);
+    // if (ioctl_dev.ioctl_gd->queue == NULL) {
+    //     printk(KERN_ALERT "logger: unable to allocate device request queue\n");
+    //     del_gendisk(ioctl_dev.ioctl_gd);
+    //     unregister_blkdev(major_num, DEVICE_NAME);
+    //     free_kprobe_list(kp_write_pmem_head);
+    //     free_kprobe_list(kp_nvdimm_flush_head);
+    //     free_kprobe_list(kp_cache_wb_head);
+    //     free_addrs();
+    //     return FAIL;
+    // }
+    // // TODO: do we have to set a custom queue request function if we won't actually be using the queue?
+    // ioctl_dev.ioctl_gd->queue->queuedata = &ioctl_dev;
 
     // actually add the disk
-    add_disk(ioctl_dev.ioctl_gd);
+    ret = add_disk(ioctl_dev.ioctl_gd);
+    if (ret < 0) {
+        printk(KERN_INFO "failed to add disk\n");
+        return ret;
+    }
 
     return SUCCESS;
 }
