@@ -8,15 +8,18 @@ GOTPSSO = -shared -fPIC
 # TODO: maybe build the loggers in the same location as other syzkaller binaries
 # instead of in their own build directory. that will also require updating where 
 # we look for the built module in the code
-# BUILD_DIR = $(CURDIR)/build
 BUILD_DIR = $(CURDIR)/../bin/linux_amd64/loggers
 
 MODULES = logger-nova logger-pmfs logger-ext4 logger-winefs
 obj-m := $(addsuffix .o, $(MODULES))
 
+logger-nova-m := logger.o
+logger-pmfs-m := logger.o
+logger-ext4-m := logger.o 
+logger-winefs-m := logger.o
+
 # THIS SHOULD BE THE PATH TO YOUR LOCAL LINUX SOURCE
-# it must have been built probably
-# TODO: somehow obtain this from the config rather than having it hardcoded here
+# it must have been built
 KDIR := $(CURDIR)/../../vmshare/linux-6.3/
 # KDIR := $(HOME)/shared/linux-5.1/
 .PHONY: all clean

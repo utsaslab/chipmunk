@@ -14,4 +14,4 @@ fi
 
 cp CHIPMUNK_CONFIG vmshare/linux-6.3/.config 
 cd vmshare/linux-6.3
-make -j $cores
+make LLVM=-14 -j $cores

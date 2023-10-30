@@ -1,35 +1,9 @@
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/init.h>
-#include <linux/ioctl.h>
-#include <linux/fs.h>
-#include <linux/fs_struct.h>
-#include <linux/blkdev.h>
-#include <linux/blk_types.h>
-#include <linux/init.h>
-#include <linux/kprobes.h>
-#include <linux/kallsyms.h>
-#include <linux/irqflags.h>
-#include <linux/delay.h>
-#include <linux/uio.h>
-#include <asm/io.h>
 #include "logger.h"
-#include "../executor/ioctl.h"
-
-// TODO: refactor
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Hayley LeBlanc");
 
 struct kprobe_node* kp_write_pmem_head = NULL;
 struct kprobe_node* kp_nvdimm_flush_head = NULL;
 struct kprobe_node* kp_cache_wb_head = NULL;
 struct kprobe_node* kp_pmem_copy_head = NULL;
-
-unsigned long pm_start = 0x100000000;
-// unsigned long pm_end = 0x107ffffff;
-unsigned long pm_size = 0x7ffffff;
-
 
 unsigned long* kp_write_pmem_addrs;
 unsigned long* kp_nvdimm_flush_addrs;
@@ -143,14 +117,6 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
                     goto out;
                 }
 
-                // // save call stack so we can determine where in the FS code the kprobe was hit
-                // trace.nr_entries = 0;
-                // trace.entries = &(new_op->metadata->trace_entries[0]);
-                // trace.max_entries = TRACE_SIZE;
-                // trace.skip = TRACE_SKIP;
-                // save_stack_trace(&trace);
-                // new_op->metadata->nr_entries = trace.nr_entries;
-
                 // metadata takes a little work to get from write_pmem, but it's better to kprobe 
                 // write_pmem than memcpy_flushcache (what it wraps) because memcpy_flushcache is always 
                 // inlined (i.e. hard to probe correctly) and I don't think we want to make people go in and 
@@ -163,29 +129,7 @@ static int __kprobes kp_write_pmem_pre_handler(struct kprobe* p, struct pt_regs 
                 new_op->metadata->src = (unsigned long long)(mem + off);
                 new_op->metadata->type = NT;
                 new_op->data = NULL;
-                // new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
 
-                // // allocate space for the data
-                // new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
-                // if (new_op->data == NULL) {
-                //     printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
-                //     kunmap_atomic(mem);
-                //     kfree(new_op->metadata);
-                //     kfree(new_op);
-                //     kprobe_fail = 1;
-                //     goto out;
-                // }
-                // // copy the data to the log
-                // // this function ensures that faults are handled correctly when reading data 
-                // // that may be coming from user space
-                // ret = copy_from_kernel_nofault(new_op->data, (void*)new_op->metadata->src, new_op->metadata->len);
-                // if (ret < 0) {
-                //     kunmap_atomic(mem);
-                //     kfree(new_op->metadata);
-                //     kfree(new_op);
-                //     kprobe_fail = 1;
-                //     goto out;
-                // }
                 kunmap_atomic(mem);
 
                 spin_lock(&kprobe_lock);
@@ -392,24 +336,6 @@ static int __kprobes kp_cache_wb_pre_handler(struct kprobe *p, struct pt_regs *r
             new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
             new_op->data = NULL;
 
-            // // allocate space for the data
-            // new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
-            // if (new_op->data == NULL) {
-            //     printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
-            //     kfree(new_op->metadata);
-            //     kfree(new_op);
-            //     kprobe_fail = 1;
-            //     goto out;
-            // }
-
-            // // copy the data to the log
-            // ret = copy_from_kernel_nofault(new_op->data, (void*)regs->di, new_op->metadata->len);
-            // if (ret < 0) {
-            //     printk(KERN_ALERT "logger: could not read data\n");
-            //     kprobe_fail = 1;
-            //     goto out;
-            // }
-
             spin_lock(&kprobe_lock);
             if (Log.tail != NULL) {
                 Log.tail->next = new_op;
@@ -527,27 +453,6 @@ static int __kprobes kp_pmem_copy_pre_handler(struct kprobe *p, struct pt_regs *
             new_op->metadata->dst = regs->dx; 
             new_op->metadata->likely_data = 0; // turning on likely data appears to slow things down
             new_op->data = NULL;
-
-            // // allocate space for the data
-            // new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
-            // if (new_op->data == NULL) {
-            //     printk(KERN_ALERT "logger: could not allocate space for log entry data\n");
-            //     kfree(new_op->metadata);
-            //     kfree(new_op);
-            //     kprobe_fail = 1;
-            //     goto out;
-            // }
-
-            // ret = copy_from_kernel_nofault(&iter, (void*)regs->r8, sizeof(struct iov_iter));
-            // if (ret < 0) {
-            //     kprobe_fail = 1;
-            //     goto out;
-            // }
-            // ret = copy_from_iter_flushcache(new_op->data, new_op->metadata->len, &iter);
-            // if (ret < 0) {
-            //     kprobe_fail = 1;
-            //     goto out;
-            // }
 
             spin_lock(&kprobe_lock);
             if (Log.tail != NULL) {
@@ -817,310 +722,6 @@ static void __exit logger_exit(void) {
     del_gendisk(ioctl_dev.ioctl_gd);
     put_disk(ioctl_dev.ioctl_gd);
     unregister_blkdev(major_num, DEVICE_NAME);
-}
-
-static void log_dequeue(void) {
-    struct write_op* temp;
-    // lock is already held
-    temp = Log.head;
-    Log.head = Log.head->next;
-    kfree(temp->data);
-    kfree(temp->metadata);
-    kfree(temp);
-    
-}
-
-static int insert_mount_mark(void) {
-    struct write_op* new_op;
-
-    if (Log.logging_on) {
-        new_op = kzalloc(sizeof(struct write_op), GFP_KERNEL);
-        // new_kp->kp = kzalloc(sizeof(struct kprobe), GFP_NOWAIT);
-        if (new_op == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry\n");
-            goto out;
-        }
-        new_op->next = NULL;
-        new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_KERNEL);
-        // new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
-        if (new_op->metadata == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
-            kfree(new_op);
-            goto out;
-        }
-
-        new_op->metadata->nr_entries = 0;
-
-        // no data is logged here 
-        // just need to take note that the FS has been mounted
-        new_op->metadata->dst = 0;
-        new_op->metadata->src = 0;
-        new_op->metadata->len = 0;
-        new_op->metadata->type = MARK;
-
-        spin_lock(&kprobe_lock);
-        if (Log.tail != NULL) {
-            Log.tail->next = new_op;
-            Log.tail = new_op;
-        }
-        else {
-            Log.tail = new_op;
-        }
-        if (Log.head == NULL) {
-            Log.head = new_op;
-        }
-        spin_unlock(&kprobe_lock);
-    }
-
-    return SUCCESS;
-
-    out:
-        printk(KERN_ALERT "logger: there was an error trying to append to the write log\n");
-        printk(KERN_INFO "logger: failed to record checkpoint in log\n");
-        return FAIL;
-
-    // return SUCCESS;
-}
-
-// this function will NOT be combined with the other pre-handlers because it needs to be handled separately
-// even though it looks very similar to them
-static int insert_checkpoint(void) {
-    struct write_op* new_op;
-
-    if (Log.logging_on) {
-        printk(KERN_INFO "CHECKPOINT\n");
-        new_op = kzalloc(sizeof(struct write_op), GFP_KERNEL);
-        // new_kp->kp = kzalloc(sizeof(struct kprobe), GFP_NOWAIT);
-        if (new_op == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry\n");
-            goto out;
-        }
-        new_op->next = NULL;
-        new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_KERNEL);
-        // new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_NOWAIT);
-        if (new_op->metadata == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
-            kfree(new_op);
-            goto out;
-        }
-
-        // no data is logged here 
-        // just need to take note that this is a checkpoint
-        new_op->metadata->dst = 0;
-        new_op->metadata->src = 0;
-        new_op->metadata->len = 0;
-        new_op->metadata->type = CHECKPOINT;
-        new_op->metadata->pid = current->pid;
-
-        spin_lock(&kprobe_lock);
-        if (Log.tail != NULL) {
-            Log.tail->next = new_op;
-            Log.tail = new_op;
-        }
-        else {
-            Log.tail = new_op;
-        }
-        if (Log.head == NULL) {
-            Log.head = new_op;
-        }
-        spin_unlock(&kprobe_lock);
-    }
-
-    return SUCCESS;
-
-    out:
-        printk(KERN_ALERT "logger: there was an error trying to append to the write log\n");
-        printk(KERN_INFO "logger: failed to record checkpoint in log\n");
-        return FAIL;
-
-    // return SUCCESS;
-}
-
-// TODO: do we actually need this here? ext4/xfs testing probably doesn't actually need this info
-static int insert_mark_sys(unsigned int sys, int end, long ret) {
-    struct write_op* new_op;
-
-    if (Log.logging_on) {
-        new_op = kzalloc(sizeof(struct write_op), GFP_KERNEL);
-        if (new_op == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry\n");
-            goto out;
-        }
-        new_op->next = NULL;
-        new_op->metadata = kzalloc(sizeof(struct op_metadata), GFP_KERNEL);
-
-        if (new_op->metadata == NULL) {
-            printk(KERN_ALERT "logger: could not allocate space for log entry metadata\n");
-            kfree(new_op);
-            goto out;
-        }
-
-        // no data is logged here 
-        // just need to take note that the FS has been mounted
-        new_op->metadata->dst = 0;
-        new_op->metadata->src = 0;
-        new_op->metadata->len = 0;
-        new_op->metadata->type = (end > 0) ? MARK_SYS_END : MARK_SYS;
-	if (!end)
-		new_op->metadata->sys = sys;
-	if (end)
-		new_op->metadata->sys_ret = ret;
-        new_op->metadata->pid = current->pid;
-
-        spin_lock(&kprobe_lock);
-        if (Log.tail != NULL) {
-            Log.tail->next = new_op;
-            Log.tail = new_op;
-        }
-        else {
-            Log.tail = new_op;
-        }
-        if (Log.head == NULL) {
-            Log.head = new_op;
-            if (Log.head == NULL) {
-            }
-        }
-        spin_unlock(&kprobe_lock);
-    }
-
-    return SUCCESS;
-
-    out:
-        printk(KERN_ALERT "logger: there was an error trying to append to the write log\n");
-        printk(KERN_INFO "logger: failed to record checkpoint in log\n");
-        return FAIL;
-}
-
-static int logger_ioctl(struct block_device* bdev, fmode_t mode, unsigned int cmd, unsigned long arg) {
-    int ret = 0;
-    unsigned int failed = 0;
-    unsigned int not_copied;
-    unsigned int offset;
-    struct write_op* cur;
-    struct write_op* temp;
-
-    switch (cmd) {
-        // pass the metadata about an operation (source and destination addresses, address where the module stored the data) to the user
-        case LOGGER_GET_OP:
-            // update_nmissed();
-            spin_lock(&kprobe_lock);
-            // ensure that we have an operation to give the user process
-            if (Log.head == NULL) {
-                printk(KERN_ALERT "logger: no logged data available\n");
-                spin_unlock(&kprobe_lock);
-                return -ENODATA;
-            }
-            // check that the provided user address to copy the metadata to is valid
-            if (!access_ok((void*)arg, sizeof(struct op_metadata))) {
-                printk(KERN_ALERT "logger: invalid user address\n");
-                spin_unlock(&kprobe_lock);
-                return -EFAULT;
-            }
-            // copy data to the user process
-            not_copied = sizeof(struct op_metadata);
-            while (not_copied != 0) {
-                offset = sizeof(struct op_metadata) - not_copied;
-                not_copied = copy_to_user((void*)(arg+offset), Log.head->metadata + offset, not_copied);
-            }
-            spin_unlock(&kprobe_lock);
-            ret = sizeof(struct op_metadata);
-            break;
-
-        // pass data associated with current copy operation to the user
-        case LOGGER_GET_DATA:
-            spin_lock(&kprobe_lock);
-            if (Log.head == NULL) {
-                printk(KERN_ALERT "logger: no logged data available\n");
-                spin_unlock(&kprobe_lock);
-                return -ENODATA;
-            }
-            if (!access_ok((void*)arg, Log.head->metadata->len)) {
-                printk(KERN_ALERT "logger: invalid user address\n");
-                spin_unlock(&kprobe_lock);
-                return -EFAULT;
-            }
-            not_copied = Log.head->metadata->len;
-            while(not_copied != 0) {
-                offset = Log.head->metadata->len - not_copied;
-                not_copied = copy_to_user((void*)(arg+offset), Log.head->data+offset, not_copied);
-            }
-            ret = Log.head->metadata->len;
-            spin_unlock(&kprobe_lock);
-            break;
-        case LOGGER_NEXT_OP:
-            spin_lock(&kprobe_lock);
-            if (Log.head == NULL) {
-                printk(KERN_ALERT "No logged data available\n");
-                spin_unlock(&kprobe_lock);
-                return -ENODATA;
-            }
-            // dequeue and free the log head, moving the log head to the next operation 
-            log_dequeue();
-            if (Log.head == NULL) {
-                printk(KERN_INFO "logger: reached end of log\n");
-                spin_unlock(&kprobe_lock);
-                return -ENODATA;
-            }
-            spin_unlock(&kprobe_lock);
-            break;
-        case LOGGER_LOG_ON:
-            printk(KERN_INFO "logger: turning logging on\n");
-            Log.logging_on = true;
-            break;
-        case LOGGER_LOG_OFF:
-            printk(KERN_INFO "logger: turning logging off\n");
-            Log.logging_on = false;
-            break;
-        case LOGGER_CHECKPOINT:
-            ret = insert_checkpoint();
-            break;
-        case LOGGER_FREE_LOG:
-            // TODO: check that logging is off before doing this?
-            // free all the logged writes in the log. does NOT unregister 
-            // kprobes or free any data associated with them 
-            spin_lock(&kprobe_lock);
-            cur = Log.head;
-            while (cur) {
-                temp = cur->next;
-                kfree(cur->metadata);
-                kfree(cur->data);
-                kfree(cur);
-                cur = temp;
-            }
-            // this is wrong - there's a dummy at the head isn't there
-            Log.head = NULL;
-            Log.tail = NULL;
-            spin_unlock(&kprobe_lock);
-            break;
-        case LOGGER_CHECK_MISSED:
-            // if something went wrong in a probe (it was missed, or there was a fault 
-            // that prevented us from copying data in from the file system), tell the 
-            // test harness so it can handle it appropriately
-            failed = check_failure();
-            return failed;
-        case LOGGER_MARK:
-            ret = insert_mount_mark();
-            break;
-        case LOGGER_MARK_SYS:
-            ret = insert_mark_sys(arg, 0, 1);
-            break;
-        case LOGGER_MARK_SYS_END:
-            ret = insert_mark_sys(0, 1, (long) arg);
-            break;
-        case LOGGER_UNDO_ON:
-            printk(KERN_ALERT "turning undo log on\n");
-            Log.undo = true;
-            break;
-        case LOGGER_UNDO_OFF:
-            printk(KERN_ALERT "turning undo log off\n");
-            Log.undo = false;
-            break;
-        case LOGGER_SET_PM_START:
-            printk(KERN_ALERT "setting pm start to %p\n", arg);
-            pm_start = arg;
-            break;
-    }
-    return ret;
 }
 
 module_init(logger_init);
