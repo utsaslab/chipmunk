@@ -1,19 +1,4 @@
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/init.h>
-#include <linux/ioctl.h>
-#include <linux/fs.h>
-#include <linux/fs_struct.h>
-#include <linux/blkdev.h>
-#include <linux/blk_types.h>
-#include <linux/init.h>
-#include <linux/kprobes.h>
-#include <linux/kallsyms.h>
-#include <linux/irqflags.h>
-#include <linux/delay.h>
-#include <asm/io.h>
 #include "logger.h"
-#include "../executor/ioctl.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Hayley LeBlanc");
@@ -833,6 +818,7 @@ static int find_memcpy_addrs(void *data, const char *namebuf,
                             struct module *module, unsigned long address) 
 {
     if (strncmp(namebuf, "rust_helper_copy_from_user_inatomic_nocache", strlen("rust_helper_copy_from_user_inatomic_nocache")) == 0) {
+        printk(KERN_INFO "%s\n", namebuf);
         ((unsigned long*)data)[memcpy_index] = address;
         memcpy_index++;
     }
@@ -844,6 +830,7 @@ static int find_flush_buffer_addrs(void *data, const char *namebuf,
                             struct module *module, unsigned long address) 
 {
     if (strstr(namebuf, "hayleyfs_flush_buffer") != NULL) {
+        printk(KERN_INFO "%s\n", namebuf);
         ((unsigned long*)data)[flush_buffer_index] = address;
         flush_buffer_index++;
     }
@@ -855,6 +842,7 @@ static int find_persistent_barrier_addrs(void *data, const char *namebuf,
                             struct module *module, unsigned long address) 
 {
     if (strstr(namebuf, "sfence") != NULL) {
+        printk(KERN_INFO "%s\n", namebuf);
         ((unsigned long*)data)[persistent_barrier_index] = address;
         persistent_barrier_index++;
     }
@@ -866,6 +854,7 @@ static int find_memset_nt_addrs(void *data, const char *namebuf,
                             struct module *module, unsigned long address) 
 {
     if (strstr(namebuf, "memset_nt") != NULL) {
+        printk(KERN_INFO "%s\n", namebuf);
         ((unsigned long*)data)[memset_nt_index] = address;
         memset_nt_index++;
     }
@@ -875,6 +864,8 @@ static int find_memset_nt_addrs(void *data, const char *namebuf,
 
 static int __init logger_init(void) {
     int ret;
+
+    printk(KERN_ALERT "loading squirrelfs logger\n");
 
     memcpy_addrs = kzalloc(NUM_KPROBE_ADDRS*sizeof(unsigned long), GFP_KERNEL);
     if (memcpy_addrs == NULL) {
@@ -899,6 +890,8 @@ static int __init logger_init(void) {
         printk(KERN_ALERT "Unable to allocate memory\n");
         return -1;
     }
+
+    printk(KERN_ALERT "finding symbols\n");
 
     // find the address of each symbol
     kallsyms_on_each_symbol(find_memcpy_addrs, memcpy_addrs);
@@ -991,6 +984,8 @@ static int __init logger_init(void) {
     Log.logging_on = false; // TODO: make this an argument at load time
     Log.undo = false;
 
+    printk(KERN_INFO "setting up ioctl device\n");
+
     // set up ioctl device 
     major_num = register_blkdev(major_num, DEVICE_NAME);
     if (major_num <= 0) {
@@ -1019,11 +1014,29 @@ static int __init logger_init(void) {
     ioctl_dev.ioctl_gd->fops = &blkdev_ops;
     strcpy(ioctl_dev.ioctl_gd->disk_name, DEVICE_NAME);
 
+    // get a request queue and set it up
+    ioctl_dev.ioctl_gd->queue = blk_alloc_queue(GFP_KERNEL);
+    if (ioctl_dev.ioctl_gd->queue == NULL) {
+        printk(KERN_ALERT "logger: unable to allocate device request queue\n");
+        del_gendisk(ioctl_dev.ioctl_gd);
+        unregister_blkdev(major_num, DEVICE_NAME);
+        free_kprobe_list(kp_memcpy_head);
+        free_kprobe_list(kp_flush_buffer_head);
+        free_kprobe_list(kp_persistent_barrier_head);
+        free_kprobe_list(kp_memset_nt_head);
+        free_addrs();
+        return FAIL;
+    }
+    // TODO: do we have to set a custom queue request function if we won't actually be using the queue?
+    ioctl_dev.ioctl_gd->queue->queuedata = &ioctl_dev;
+
+
     ret = add_disk(ioctl_dev.ioctl_gd);
     if (ret < 0) {
         printk(KERN_INFO "failed to add disk\n");
         return ret;
     }
+    printk(KERN_INFO "loaded squirrelfs logger\n");
 
     return 0;
 }

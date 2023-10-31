@@ -64,7 +64,7 @@ string pm_device = "/dev/pmem0";
 string replay_device_path = "/dev/pmem1";
 string mount_point = "/mnt/pmem";
 string replay_mount_point = "/mnt/pmem_replay";
-string kernel = "../linux-5.1/vmlinux";
+string kernel = "../linux-6.3/vmlinux";
 string fs = "NOVA";
 string testerType = "";
 int max_k = 2;
@@ -209,7 +209,7 @@ int main(int argc, char* argv[]) {
         command = "rmmod logger_ext4";
     }
     system(command.c_str());
-    if (fs != "ext4" && fs != "xfs") {
+    if (fs != "ext4" && fs != "xfs" && fs != "squirrelfs") {
         command = "rmmod " + fs_type + " -f";
         system(command.c_str());
         // TODO: don't rely on hardcoded absolute paths

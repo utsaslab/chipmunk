@@ -13,7 +13,7 @@ if [ -z $cores ]; then
     exit 1
 fi
 
-image_name="buster${image}.img"
+image_name="stretch${image}.img"
 
 # sudo qemu-system-x86_64 -boot c -m 8192 -hda $image -enable-kvm \
 # -nographic -kernel vmshare/linux-5.1/arch/x86/boot/bzImage -append \
