@@ -1010,25 +1010,8 @@ static int __init logger_init(void) {
         return FAIL;
     }
     ioctl_dev.ioctl_gd->private_data = &ioctl_dev;
-    ioctl_dev.ioctl_gd->major = major_num;
     ioctl_dev.ioctl_gd->fops = &blkdev_ops;
     strcpy(ioctl_dev.ioctl_gd->disk_name, DEVICE_NAME);
-
-    // // get a request queue and set it up
-    // ioctl_dev.ioctl_gd->queue = blk_alloc_queue(GFP_KERNEL);
-    // if (ioctl_dev.ioctl_gd->queue == NULL) {
-    //     printk(KERN_ALERT "logger: unable to allocate device request queue\n");
-    //     del_gendisk(ioctl_dev.ioctl_gd);
-    //     unregister_blkdev(major_num, DEVICE_NAME);
-    //     free_kprobe_list(kp_memcpy_head);
-    //     free_kprobe_list(kp_flush_buffer_head);
-    //     free_kprobe_list(kp_persistent_barrier_head);
-    //     free_kprobe_list(kp_memset_nt_head);
-    //     free_addrs();
-    //     return FAIL;
-    // }
-    // // TODO: do we have to set a custom queue request function if we won't actually be using the queue?
-    // ioctl_dev.ioctl_gd->queue->queuedata = &ioctl_dev;
 
 
     ret = add_disk(ioctl_dev.ioctl_gd);
@@ -1048,6 +1031,23 @@ static void __exit logger_exit(void) {
     free_kprobe_list(kp_memset_nt_head);
 
     free_addrs();
+
+    spin_lock(&kprobe_lock);
+    // clean up log
+    cur = Log.head;
+    while (cur) {
+        temp = cur->next;
+        kfree(cur->metadata);
+        kfree(cur->data);
+        kfree(cur);
+        cur = temp;
+    }
+    spin_unlock(&kprobe_lock);
+
+    // delete and unregister the dummy device used for ioctl
+    del_gendisk(ioctl_dev.ioctl_gd);
+    put_disk(ioctl_dev.ioctl_gd);
+    unregister_blkdev(major_num, DEVICE_NAME);
 }
 
 module_init(logger_init);
