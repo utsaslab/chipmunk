@@ -13,12 +13,6 @@ BUILD_DIR = $(CURDIR)/../bin/linux_amd64/loggers
 MODULES = logger-nova logger-pmfs logger-ext4 logger-winefs logger-squirrelfs
 obj-m := $(addsuffix .o, $(MODULES))
 
-logger-nova-m := logger.o
-logger-pmfs-m := logger.o
-logger-ext4-m := logger.o 
-logger-winefs-m := logger.o
-logger-squirrelfs-m := logger.o
-
 # THIS SHOULD BE THE PATH TO YOUR LOCAL LINUX SOURCE
 # it must have been built
 KDIR := $(CURDIR)/../../vmshare/linux-6.3/
