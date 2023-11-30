@@ -13,7 +13,7 @@
 #include <assert.h>
 #include <sys/ioctl.h>
 #include <string>
-#include <thread> 
+#include <thread>
 #include <sys/sendfile.h>
 #include <chrono>
 
@@ -22,21 +22,21 @@
 #include "AceTester.h"
 // #include "SyzkallerTester.h"
 
-using std::string;
+using fs_testing::AceTester;
+using fs_testing::Tester;
+using std::cerr;
 using std::cout;
 using std::endl;
 using std::ofstream;
-using std::cerr;
-using std::stoull;
 using std::stoi;
-using std::chrono::steady_clock;
+using std::stoull;
+using std::string;
 using std::chrono::duration;
 using std::chrono::duration_cast;
-using std::chrono::milliseconds;
 using std::chrono::microseconds;
+using std::chrono::milliseconds;
+using std::chrono::steady_clock;
 using std::chrono::time_point;
-using fs_testing::Tester;
-using fs_testing::AceTester;
 // using fs_testing::SyzkallerTester;
 
 #define OPTSTRING "a:s:b:r:p:d:q:u:m:hvk:tf:Do:M:n:A:"
@@ -51,12 +51,12 @@ using fs_testing::AceTester;
 #define IMG1 "sudo dd if=/dev/zero of="
 #define IMG2 "/code/replay/nova_replay.img bs=128M count=1 status=noxfer > /dev/null 2>&1"
 
-// default values; assumes we are using 128MB PM devices starting at 4GB. Users can change 
+// default values; assumes we are using 128MB PM devices starting at 4GB. Users can change
 // these values via command line
 // TODO: we may be able to get these values dynamically from NOVA or the PM device
 unsigned long pm_start = 0x100000000;
-unsigned long pm_size =  0x7ffffff;
-unsigned long replay_pm_start = 0x108000000; // TODO: make this command line arg or get it dynamically
+unsigned long pm_size = 0x11fffffff;
+unsigned long replay_pm_start = 0x120000000; // TODO: make this command line arg or get it dynamically
 
 // NOTE: path_to_base_img is relative to the source directory of the nova-tester repo
 string path_to_base_img = "code/replay/base.img";
@@ -97,7 +97,8 @@ static const option long_options[] = {
     {0, 0, 0, 0},
 };
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
     int option_index = 0;
     int ret, fd, r;
     string command;
@@ -111,7 +112,7 @@ int main(int argc, char* argv[]) {
     bool make_trace = false;
     bool check_data = false;
     string mount_opts = "";
-    int num_threads = 1; // higher value + test set up for multithreading will test concurrent operations 
+    int num_threads = 1; // higher value + test set up for multithreading will test concurrent operations
     unsigned long long mod_addr = 0;
     bool coverage = false;
     milliseconds elapsed;
@@ -122,119 +123,142 @@ int main(int argc, char* argv[]) {
     time_point<steady_clock> setup_start = steady_clock::now();
 
     opterr = 0;
-    // parse command line arguments 
-    for (int c = getopt_long(argc, argv, OPTSTRING, long_options, &option_index); 
-         c != -1; 
-         c = getopt_long(argc, argv, OPTSTRING, long_options, &option_index) ) {
-        switch (c) {
-            case 'a':
-                // TODO: let users give this in terms of KMG
-                pm_start = strtol(optarg, NULL, 16);
-                break;
-            case 's':
-                // TODO: let users give this in terms of KMG
-                pm_size = strtol(optarg, NULL, 16);
-                break;
-            case 'M':
-                mod_addr = stoull(optarg, NULL, 16);
-            case 'u':
-                printf("COVER\n");
-                coverage = true;
-                break;
-            case 'b':
-                path_to_base_img = string(optarg);
-                break;
-            case 'd':
-                pm_device = string(optarg);
-                break;
-            case 'm':
-                mount_point = string(optarg);
-                break;
-            case 'r':
-                replay_device_path = string(optarg);
-                break;
-            case 'p':
-                replay_mount_point = string(optarg);
-                break;
-            case 'v':
-                verbose = true;
-                break;
-            case 'q':
-                testerType = string(optarg);
-                break;
-            case 'k':
-                kernel = string(optarg);
-                break;
-            case 't':
-                make_trace = true;
-                break;
-            case 'f':
-                fs = string(optarg);
-                break;
-            case 'D':
-                check_data = true;
-                break;
-            case 'o':
-                mount_opts = string(optarg);
-                break;
-            case 'n':
-                num_threads = stoi(optarg);
-                break;
-            case 'A':
-                // TODO: there should be a way to indicate that you want to check EVERYTHING
-                max_k = stoi(optarg);
-                break;
-            case 'h':
-                printf("print help\n");
-                return 0;
+    // parse command line arguments
+    for (int c = getopt_long(argc, argv, OPTSTRING, long_options, &option_index);
+         c != -1;
+         c = getopt_long(argc, argv, OPTSTRING, long_options, &option_index))
+    {
+        switch (c)
+        {
+        case 'a':
+            // TODO: let users give this in terms of KMG
+            pm_start = strtol(optarg, NULL, 16);
+            break;
+        case 's':
+            // TODO: let users give this in terms of KMG
+            pm_size = strtol(optarg, NULL, 16);
+            break;
+        case 'M':
+            mod_addr = stoull(optarg, NULL, 16);
+        case 'u':
+            printf("COVER\n");
+            coverage = true;
+            break;
+        case 'b':
+            path_to_base_img = string(optarg);
+            break;
+        case 'd':
+            pm_device = string(optarg);
+            break;
+        case 'm':
+            mount_point = string(optarg);
+            break;
+        case 'r':
+            replay_device_path = string(optarg);
+            break;
+        case 'p':
+            replay_mount_point = string(optarg);
+            break;
+        case 'v':
+            verbose = true;
+            break;
+        case 'q':
+            testerType = string(optarg);
+            break;
+        case 'k':
+            kernel = string(optarg);
+            break;
+        case 't':
+            make_trace = true;
+            break;
+        case 'f':
+            fs = string(optarg);
+            break;
+        case 'D':
+            check_data = true;
+            break;
+        case 'o':
+            mount_opts = string(optarg);
+            break;
+        case 'n':
+            num_threads = stoi(optarg);
+            break;
+        case 'A':
+            // TODO: there should be a way to indicate that you want to check EVERYTHING
+            max_k = stoi(optarg);
+            break;
+        case 'h':
+            printf("print help\n");
+            return 0;
         }
         opterr = 0;
     }
 
     // TODO: check that pm_device and replay_device_path are actually DAX devices that NOVA can be mounted on
 
-    if (testerType == "syz") {
+    if (testerType == "syz")
+    {
         assert(0 && "syzkaller tester is not supported by the ACE test harness right now");
     }
 
     string fs_type;
-    if (fs == "NOVA") {
+    if (fs == "NOVA")
+    {
         fs_type = "nova";
-    } else {
+    }
+    else
+    {
         fs_type = fs;
     }
-    if (fs != "xfs") {
+    if (fs != "xfs")
+    {
         command = "rmmod logger_" + fs_type;
-    } else {
+    }
+    else
+    {
         command = "rmmod logger_ext4";
     }
     system(command.c_str());
-    if (fs != "ext4" && fs != "xfs" && fs != "squirrelfs") {
+    if (fs != "ext4" && fs != "xfs" && fs != "hayleyfs")
+    {
         command = "rmmod " + fs_type + " -f";
         system(command.c_str());
         // TODO: don't rely on hardcoded absolute paths
         command = "insmod /root/tmpdir/linux-5.1/fs/" + fs_type + "/" + fs_type + ".ko";
         r = system(command.c_str());
-        if (r < 0) {
+        if (r < 0)
+        {
             cout << "failed to load fs module" << endl;
             return r;
         }
     }
-    if (fs != "xfs") {
-        command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-" + fs_type + ".ko";
-    } else {
+    if (fs != "xfs")
+    {
+        if (fs == "hayleyfs")
+        {
+            command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-squirrelfs.ko";
+        }
+        else
+        {
+            command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-" + fs_type + ".ko";
+        }
+    }
+    else
+    {
         // XFS uses the ext4 logger
         command = "insmod /root/tmpdir/syzkallerBinaries/linux_amd64/loggers/logger-ext4.ko";
     }
     r = system(command.c_str());
-	if (r < 0) {
-		cout << "failed to load logger module" << endl;
+    if (r < 0)
+    {
+        cout << "failed to load logger module" << endl;
         return r;
-	}
+    }
 
     const unsigned int test_case_idx = optind;
     test_file_path = argv[test_case_idx];
-    if (test_file_path.empty()) {
+    if (test_file_path.empty())
+    {
         cerr << "Please give an .so test case to load" << endl;
         return -1;
     }
@@ -244,9 +268,10 @@ int main(int argc, char* argv[]) {
     // Remove everything before the last /.
     string test_name = test_file_path.substr(begin + 1);
     // Remove the extension
-    if (test_name.find("\\.so") != std::string::npos) {
-      test_name = test_name.substr(0, test_name.length() - 3);
-      std::cout << "found!" << '\n';
+    if (test_name.find("\\.so") != std::string::npos)
+    {
+        test_name = test_name.substr(0, test_name.length() - 3);
+        std::cout << "found!" << '\n';
     }
     // Get the date and time stamp and format.
     time_t now = time(0);
@@ -259,17 +284,21 @@ int main(int argc, char* argv[]) {
     // if we are testing ext4-dax, need to provide the -o dax mount option
     // TODO: what happens if the user provides the -o dax option (or a version of it)?
     // should probably check to see if they provided it
-    if (fs == "ext4" || fs == "xfs") {
+    if (fs == "ext4" || fs == "xfs")
+    {
         mount_opts += ",dax";
-        // right now, we will just use ACE tests to test ext4 dax. syzkaller doesn't have 
+        // right now, we will just use ACE tests to test ext4 dax. syzkaller doesn't have
         // the proper fsync/sync/fdatasync usage built in
-        if (testerType == "syz") {
+        if (testerType == "syz")
+        {
             cout << "syzkaller tester does not currently support EXT4-DAX or XFS-DAX" << endl;
             logfile << "syzkaller tester does not currently support EXT4-DAX or XFS-DAX" << endl;
             logfile.close();
             return -1;
         }
-    } else {
+    }
+    else
+    {
         reorder = true;
     }
 
@@ -283,23 +312,22 @@ int main(int argc, char* argv[]) {
     bool last_checkpoint = false;
 
     /*
-     * Phase 1: get a profile of the workload. We do not do any logging here 
+     * Phase 1: get a profile of the workload. We do not do any logging here
      * because this is JUST to get a profile. We also set up the tester object
      * that we will use for the rest of this test here. Profiling is only concerned
      * with system call activity so we don't need to use the base image here.
      */
-    
 
-    Tester* tester;
+    Tester *tester;
     logfile << "TEST TYPE: " << testerType << endl;
-      tester = new AceTester(pm_device, replay_device_path, mount_point, replay_mount_point,
-                             pm_start, pm_size, kernel, fs, check_data, mount_opts, mod_addr,
-                             num_threads, coverage, replay_pm_start, max_k);
+    tester = new AceTester(pm_device, replay_device_path, mount_point, replay_mount_point,
+                           pm_start, pm_size, kernel, fs, check_data, mount_opts, mod_addr,
+                           num_threads, coverage, replay_pm_start, max_k);
     tester->set_test_name(test_name); // TODO: include sequence length?
 
-
     ret = tester->test_load_class(test_file_path.c_str());
-    if (ret != 0) {
+    if (ret != 0)
+    {
         perror("test_load_class");
         logfile << "Unable to load test class" << endl;
         tester->cleanup(logfile);
@@ -317,7 +345,8 @@ int main(int argc, char* argv[]) {
     time_point<steady_clock> profile_start = steady_clock::now();
 
     fd = open("/dev/ioctl_dummy", 0);
-    if (fd < 0) {
+    if (fd < 0)
+    {
         perror("Unable to open IOCTL device");
         logfile << "Unable to open IOCTL device; is logger module loaded?" << endl;
         tester->cleanup(logfile);
@@ -325,10 +354,11 @@ int main(int argc, char* argv[]) {
         return fd;
     }
     // make sure logging is turned off
-    // TODO: this may not be necessary, but probably a good idea to make sure we don't 
+    // TODO: this may not be necessary, but probably a good idea to make sure we don't
     // try to add to the log while it's being freed
     ret = ioctl(fd, LOGGER_LOG_OFF, NULL);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         perror("ioctl");
         logfile << "Error turning on logging" << endl;
         close(fd);
@@ -338,7 +368,8 @@ int main(int argc, char* argv[]) {
     }
     // free the log now to ensure any remaining data from the last test is cleaned up
     ret = ioctl(fd, LOGGER_FREE_LOG, NULL);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         perror("ioctl");
         logfile << "Error freeing log via IOCTL" << endl;
         close(fd);
@@ -349,7 +380,8 @@ int main(int argc, char* argv[]) {
 
     // make sure we record writes for the main PM devices
     ret = ioctl(fd, LOGGER_SET_PM_START, pm_start);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         perror("ioctl");
         logfile << "Error setting PM address" << endl;
         close(fd);
@@ -358,10 +390,10 @@ int main(int argc, char* argv[]) {
         return ret;
     }
 
-
     // now turn logging on for the test
     ret = ioctl(fd, LOGGER_LOG_ON, NULL);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         perror("ioctl");
         logfile << "Error turning on logging" << endl;
         close(fd);
@@ -374,7 +406,8 @@ int main(int argc, char* argv[]) {
 
     // mount the FS, making sure to create a new one since we haven't copied anything in
     ret = tester->mount_fs(true);
-    if (ret != 0) {
+    if (ret != 0)
+    {
         perror("mount_fs");
         logfile << "Unable to mount file system for profiling, error code" << ret << endl;
         tester->cleanup(logfile);
@@ -384,7 +417,8 @@ int main(int argc, char* argv[]) {
 
     // fork a process to run the entire workload
     child = fork();
-    if (child < 0) {
+    if (child < 0)
+    {
         perror("fork");
         logfile << "Error forking child process, error code" << child << endl;
         tester->cleanup(logfile);
@@ -392,22 +426,27 @@ int main(int argc, char* argv[]) {
         return child;
     }
     // parent process
-    else if (child != 0) {
-        while (waitres == 0) {
+    else if (child != 0)
+    {
+        while (waitres == 0)
+        {
             waitres = waitpid(child, &status, WNOHANG);
         }
         // if the child didn't exit normally
-        if (WIFEXITED(status) == 0) {
+        if (WIFEXITED(status) == 0)
+        {
             printf("Error terminating test_run process, status %d\n", status);
             logfile << "Child process exited with error " << WEXITSTATUS(status) << endl;
             tester->cleanup(logfile);
             logfile.close();
             return 1;
         }
-        else {
-            // the child should run the process in its entirety so the return value 
+        else
+        {
+            // the child should run the process in its entirety so the return value
             // should always be 0, but check just in case
-            if (WEXITSTATUS(status) != 0) {
+            if (WEXITSTATUS(status) != 0)
+            {
                 // printf("Something weird happened! The child returned %d during profiling", status);
                 printf("Child process terminated with status %d\n", status);
                 logfile << "Child process exited with error " << status << endl;
@@ -419,23 +458,26 @@ int main(int argc, char* argv[]) {
         // otherwise, evething happened correctly
     }
     // forked process
-    else {
+    else
+    {
         change_fd = open(kChangePath, O_CREAT | O_WRONLY | O_TRUNC,
-                        S_IRUSR | S_IWUSR);
-        if (change_fd < 0) {
+                         S_IRUSR | S_IWUSR);
+        if (change_fd < 0)
+        {
             logfile << "Test workload returned " << change_fd << endl;
             perror("open");
             printf("failed to open change fd\n");
             return change_fd;
         }
         ret = tester->test_run(change_fd, checkpoint, logfile);
-        close (change_fd);
+        close(change_fd);
         return ret;
     }
 
     // unmount the file system
     ret = tester->unmount_fs();
-    if (ret != 0) {
+    if (ret != 0)
+    {
         perror("unmount_fs");
         logfile << "Error unmounting file system, error code " << ret << endl;
         tester->cleanup(logfile);
@@ -447,7 +489,8 @@ int main(int argc, char* argv[]) {
 
     // load profile into tester->object BEFORE running tests so we only have to do it once
     change_fd = open(kChangePath, O_RDONLY);
-    if (change_fd < 0) {
+    if (change_fd < 0)
+    {
         perror("open");
         logfile << "Error opening profile file, error code " << change_fd << endl;
         tester->cleanup(logfile);
@@ -456,7 +499,8 @@ int main(int argc, char* argv[]) {
     }
 
     ret = lseek(change_fd, 0, SEEK_SET);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         perror("lseek");
         logfile << "Error seeking in profile file, error code " << ret << endl;
         close(change_fd);
@@ -466,7 +510,8 @@ int main(int argc, char* argv[]) {
     }
 
     ret = tester->GetChangeData(change_fd);
-    if (ret != 0) {
+    if (ret != 0)
+    {
         logfile << "Error getting workload profile, error code " << ret << endl;
         close(change_fd);
         tester->cleanup(logfile);
@@ -479,7 +524,8 @@ int main(int argc, char* argv[]) {
     logfile << "time to read disk mods " << elapsed.count() << endl;
     logfile << "----------------------------" << endl;
 
-    if (verbose) {
+    if (verbose)
+    {
         printf("Running replay and checking for bugs\n");
     }
 
@@ -489,7 +535,8 @@ int main(int argc, char* argv[]) {
     // since it's probably a temporary problem causing the kprobes to be missed.
 
     fd = open("/dev/ioctl_dummy", 0);
-    if (fd < 0) {
+    if (fd < 0)
+    {
         perror("Unable to open IOCTL device");
         logfile << "Unable to open IOCTL device; is logger module loaded?" << endl;
         tester->cleanup(logfile);
@@ -498,7 +545,8 @@ int main(int argc, char* argv[]) {
     }
 
     ret = ioctl(fd, LOGGER_LOG_OFF, NULL);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         perror("ioctl");
         logfile << "Error turning on logging" << endl;
         close(fd);
@@ -508,9 +556,12 @@ int main(int argc, char* argv[]) {
     }
 
     ret = ioctl(fd, LOGGER_CHECK_MISSED, NULL);
-    if (ret < 0) {
-        cout << "At least one kprobe was missed during testing; results are unreliable, so test is failed by default\n" << endl;
-        logfile << "At least one kprobe was missed during testing; results are unreliable, so test is failed by default\n" << endl;
+    if (ret < 0)
+    {
+        cout << "At least one kprobe was missed during testing; results are unreliable, so test is failed by default\n"
+             << endl;
+        logfile << "At least one kprobe was missed during testing; results are unreliable, so test is failed by default\n"
+                << endl;
         tester->cleanup(logfile);
         logfile.close();
         return 2; // indicates that we failed specifically due to kprobe issue so the python wrapper can handle it
@@ -518,7 +569,8 @@ int main(int argc, char* argv[]) {
 
     // now that we'll be replaying, set the PM start address to the replay device
     ret = ioctl(fd, LOGGER_SET_PM_START, replay_pm_start);
-        if (ret < 0) {
+    if (ret < 0)
+    {
         perror("ioctl");
         logfile << "Error setting PM address" << endl;
         close(fd);
@@ -533,7 +585,8 @@ int main(int argc, char* argv[]) {
     time_point<steady_clock> replay_start = steady_clock::now();
 
     ret = tester->replay(logfile, checkpoint, test_name, make_trace, reorder, s);
-    if (ret != 0) {
+    if (ret != 0)
+    {
         perror("replay");
         logfile << "Error replaying writes, error code " << ret << endl;
         tester->cleanup(logfile);
@@ -549,7 +602,8 @@ int main(int argc, char* argv[]) {
     time_point<steady_clock> free_log_start = steady_clock::now();
 
     fd = open("/dev/ioctl_dummy", 0);
-    if (fd < 0) {
+    if (fd < 0)
+    {
         perror("Unable to open IOCTL device");
         logfile << "Unable to open IOCTL device; is logger module loaded?" << endl;
         tester->cleanup(logfile);
@@ -557,7 +611,8 @@ int main(int argc, char* argv[]) {
         return fd;
     }
     ret = ioctl(fd, LOGGER_LOG_OFF, NULL);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         perror("ioctl");
         logfile << "Error turning on logging" << endl;
         close(fd);
@@ -566,7 +621,8 @@ int main(int argc, char* argv[]) {
         return ret;
     }
     ret = ioctl(fd, LOGGER_FREE_LOG, NULL);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         perror("ioctl");
         logfile << "Error freeing log via IOCTL" << endl;
         close(fd);
@@ -586,7 +642,8 @@ int main(int argc, char* argv[]) {
 
     bool retval;
     retval = tester->test_replay(logfile, checkpoint, test_name, make_trace, reorder);
-    if (retval == false) {
+    if (retval == false)
+    {
         cout << "Test failed" << endl;
         passed = 1;
     }
@@ -595,7 +652,8 @@ int main(int argc, char* argv[]) {
     logfile << "time to run test " << elapsed.count() << endl;
     logfile << "----------------------------" << endl;
 
-    if (verbose) {
+    if (verbose)
+    {
         printf("Cleaning up\n");
     }
     tester->cleanup(logfile);
@@ -606,32 +664,37 @@ int main(int argc, char* argv[]) {
     return passed;
 }
 
-int set_up_imgs(string pm_device, string path_to_base_img, bool verbose) {
+int set_up_imgs(string pm_device, string path_to_base_img, bool verbose)
+{
     char cwd[128];
-    char* ret_ptr;
+    char *ret_ptr;
     int ret;
     string command;
 
     ret_ptr = getcwd(cwd, sizeof(cwd));
-    if (ret_ptr == NULL) {
+    if (ret_ptr == NULL)
+    {
         perror("getcwd");
         return ret;
     }
 
-    if (verbose) {
-       printf("Setting up PM device and file system images\n");
+    if (verbose)
+    {
+        printf("Setting up PM device and file system images\n");
     }
 
     remove("/tmp/nova_replay.img");
 
     int fd = open("/tmp/nova_replay.img", O_RDWR | O_CREAT);
-    if (fd < 0) {
+    if (fd < 0)
+    {
         perror("open");
         return fd;
     }
-    
+
     ret = ftruncate(fd, pm_size);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         printf("truncate failed\n");
         perror("truncate");
         return ret;
@@ -640,5 +703,4 @@ int set_up_imgs(string pm_device, string path_to_base_img, bool verbose) {
     close(fd);
 
     return 0;
-
 }
