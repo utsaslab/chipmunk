@@ -55,8 +55,8 @@ using std::chrono::time_point;
 // these values via command line
 // TODO: we may be able to get these values dynamically from NOVA or the PM device
 unsigned long pm_start = 0x100000000;
-unsigned long pm_size = 0x11fffffff;
-unsigned long replay_pm_start = 0x120000000; // TODO: make this command line arg or get it dynamically
+unsigned long pm_size = 0x7ffffff;
+unsigned long replay_pm_start = 0x108000000; // TODO: make this command line arg or get it dynamically
 
 // NOTE: path_to_base_img is relative to the source directory of the nova-tester repo
 string path_to_base_img = "code/replay/base.img";
@@ -225,6 +225,17 @@ int main(int argc, char *argv[])
         system(command.c_str());
         // TODO: don't rely on hardcoded absolute paths
         command = "insmod /root/tmpdir/linux-5.1/fs/" + fs_type + "/" + fs_type + ".ko";
+        r = system(command.c_str());
+        if (r < 0)
+        {
+            cout << "failed to load fs module" << endl;
+            return r;
+        }
+    } else if (fs == "hayleyfs") {
+        command = "rmmod " + fs_type + " -f";
+        system(command.c_str());
+        // TODO: don't rely on hardcoded absolute paths
+        command = "insmod /root/tmpdir/linux-6.3/fs/" + fs_type + "/" + fs_type + ".ko";
         r = system(command.c_str());
         if (r < 0)
         {
@@ -580,6 +591,7 @@ int main(int argc, char *argv[])
     close(fd);
 
     logfile << "running tester.replay" << endl;
+    cout << "running tester.replay" << endl;
     // TODO: could we speed things up later by replaying directly onto a PM device?
 
     time_point<steady_clock> replay_start = steady_clock::now();

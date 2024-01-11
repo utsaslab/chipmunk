@@ -1,5 +1,5 @@
 #!/bin/bash
 
 make
-rm -r ../vmshare/syzkallerBinaries/*
+rm -rf ../vmshare/syzkallerBinaries/*
 cp -r bin/* ../vmshare/syzkallerBinaries

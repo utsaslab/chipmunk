@@ -28,8 +28,8 @@ MODULE_AUTHOR("Hayley LeBlanc");
 static int major_num = 0;
 static DEFINE_SPINLOCK(kprobe_lock);
 
-unsigned long pm_start = 0x100000000;
-unsigned long pm_size = 0x7ffffff;
+unsigned long long pm_start = 0x100000000;
+unsigned long long pm_size = 0x7ffffff;
 
 int kprobe_fail = 0;
 

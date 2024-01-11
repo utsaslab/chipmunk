@@ -10,10 +10,10 @@ struct kprobe_node* kp_memset_nt_head = NULL;
 
 unsigned long long seq_num;
 
-module_param(pm_start, long, 0);
-MODULE_PARM_DESC(pm_start, "pm_start is an unsigned long indicating the physical address of the beginning of the PM device\n");
-module_param(pm_size, long, 0);
-MODULE_PARM_DESC(pm_size, "pm_size is an unsigned long indicating the size of the PM device\n");
+// module_param(pm_start, long, 0);
+// MODULE_PARM_DESC(pm_start, "pm_start is an unsigned long indicating the physical address of the beginning of the PM device\n");
+// module_param(pm_size, long, 0);
+// MODULE_PARM_DESC(pm_size, "pm_size is an unsigned long indicating the size of the PM device\n");
 
 
 // 1st arg: part of dst addr - di
