@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <iostream>
 
 #include "../api/actions.h"
 #include "../../ioctl.h"

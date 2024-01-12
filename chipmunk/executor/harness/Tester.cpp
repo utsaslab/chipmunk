@@ -645,7 +645,6 @@ namespace fs_testing
             {
                 checkpoint_count++;
             }
-
             if (!combined_data_write)
             {
                 if (head == NULL)
@@ -1918,6 +1917,7 @@ namespace fs_testing
         // mounted, we can try to throw a crash in here
         // first: make a copy of the replay up to this point BEFORE
         // flushing these unordered writes
+        cout << "make and check crash states" << endl;
         if (fs_mounted && reorder)
         {
             sfence_count++;
@@ -1958,7 +1958,9 @@ namespace fs_testing
                     }
                     subset_trace.close();
                 }
+                cout << "making replay" << endl;
                 ret = make_replay(test_name2, replay_device_path, new_subsets[i], log);
+                cout << "done making replay" << endl;
                 time_point<steady_clock> create_state = steady_clock::now();
                 elapsed = duration_cast<milliseconds>(create_state - run_test_start);
                 log << "time to create crash state: " << elapsed.count() << endl;
@@ -1971,7 +1973,9 @@ namespace fs_testing
                 // }
 
                 // TODO: put an option in to save the replay files
+                cout << "checking crash state" << endl;
                 ret = check_crash_state(fd_replay, test_name2, log, checkpoint, reorder, false);
+                cout << "done checking crash state" << endl;
                 time_point<steady_clock> check_state = steady_clock::now();
                 elapsed = duration_cast<milliseconds>(check_state - create_state);
                 log << "time to test crash state: " << elapsed.count() << endl;

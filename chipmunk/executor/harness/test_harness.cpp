@@ -210,11 +210,12 @@ int main(int argc, char *argv[])
     {
         fs_type = fs;
     }
-    if (fs != "xfs")
+    if (fs != "xfs" && fs != "hayleyfs")
     {
         command = "rmmod logger_" + fs_type;
-    }
-    else
+    } else if (fs == "hayleyfs") {
+        command = "rmmod logger_squirrelfs";
+    } else
     {
         command = "rmmod logger_ext4";
     }
