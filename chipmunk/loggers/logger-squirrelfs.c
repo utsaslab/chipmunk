@@ -35,7 +35,6 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
     if (Log.logging_on && start >= pm_start && start < (pm_start + pm_size))
     {
         len = regs->dx;
-        printk(KERN_ALERT "[logger] memcpy of size %llx to %llx\n", len, start);
 
         // if len is greater than the size of the start address to the end of the
         // PM device, reduce it to that size. This will prevent weird errors
@@ -448,9 +447,6 @@ static int __kprobes flush_buffer_pre_handler(struct kprobe *p, struct pt_regs *
     int ret;
     unsigned long long len, to_write, offset, start, mod64;
     start = (unsigned long long)(virt_to_phys((void *)regs->di));
-    printk(KERN_ALERT "[logger] flush buffer of %llx\n", start);
-    printk(KERN_ALERT "[logger] pm start %llx\n", pm_start);
-    printk(KERN_ALERT "logging on %d\n", Log.logging_on);
     if (Log.logging_on && (unsigned long long)(virt_to_phys((void *)regs->di)) >= pm_start && (unsigned long long)(virt_to_phys((void *)regs->di)) < (pm_start + pm_size))
     {
 
@@ -739,7 +735,6 @@ static int __kprobes persistent_barrier_pre_handler(struct kprobe *p, struct pt_
     // we don't need to know about SFENCES when creating an undo log
     if (Log.logging_on && !Log.undo)
     {
-        // printk(KERN_ALERT "[logger] sfence\n");
         new_op = kzalloc(sizeof(struct write_op), GFP_NOWAIT);
         if (new_op == NULL)
         {
@@ -833,8 +828,6 @@ static int __kprobes memset_pre_handler(struct kprobe *p, struct pt_regs *regs)
             new_op->metadata->likely_data = 1;
             new_op->metadata->pid = current->pid;
             new_op->metadata->memset = 1;
-
-            printk(KERN_ALERT "[logger] memset of size %llx to %llx\n", new_op->metadata->len, new_op->metadata->dst);
 
             // // instead of creating a buffer for the whole memset, just record the value we are setting
             // printk(KERN_ALERT "allocating %d\n", sizeof(int));
@@ -1015,8 +1008,6 @@ static int __init logger_init(void)
         printk(KERN_ALERT "Unable to allocate memory\n");
         return -1;
     }
-
-    printk(KERN_ALERT "finding symbols\n");
 
     // find the address of each symbol
     // FIXME: kallsyms_on_each_symbol is no longer exported (v5.7+); current workaround is to modify the kernel

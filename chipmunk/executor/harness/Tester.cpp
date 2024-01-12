@@ -285,7 +285,6 @@ namespace fs_testing
         int ret;
         if (collect_cover && this->collect_mount_cover)
             cover_reset(&((this->th)->mount_cov));
-        cout << "mounting " << replay_device_path << " on " << replay_mount_point << " fs type " << fs << endl;
         ret = mount(replay_device_path.c_str(), replay_mount_point.c_str(), fs.c_str(), 0, mount_opts.c_str());
         if (collect_cover && this->collect_mount_cover)
             write_call_output(this, this->th, true, this->collect_cover, true);
@@ -1959,7 +1958,6 @@ namespace fs_testing
                     }
                     subset_trace.close();
                 }
-                cout << "making replay on device " << replay_device_path << endl;
                 ret = make_replay(test_name2, replay_device_path, new_subsets[i], log);
                 time_point<steady_clock> create_state = steady_clock::now();
                 elapsed = duration_cast<milliseconds>(create_state - run_test_start);
@@ -1973,8 +1971,6 @@ namespace fs_testing
                 // }
 
                 // TODO: put an option in to save the replay files
-                cout << "checking crash state" << endl;
-                cout << "oracle fd " << fd << ", replay fd " << fd_replay << endl; 
                 ret = check_crash_state(fd_replay, test_name2, log, checkpoint, reorder, false);
                 time_point<steady_clock> check_state = steady_clock::now();
                 elapsed = duration_cast<milliseconds>(check_state - create_state);
@@ -2008,7 +2004,6 @@ namespace fs_testing
             log << "Unable to open IOCTL device; is logger module loaded?" << endl;
             return fd_ioctl;
         }
-        cout << "Turning logging off" << endl;
         ret = ioctl(fd_ioctl, LOGGER_LOG_OFF, NULL);
         if (ret < 0)
         {
@@ -2017,7 +2012,6 @@ namespace fs_testing
             close(fd_ioctl);
             return ret;
         }
-        cout << "Freeing log" << endl;
         ret = ioctl(fd_ioctl, LOGGER_FREE_LOG, NULL);
         if (ret < 0)
         {
@@ -2027,7 +2021,6 @@ namespace fs_testing
             return ret;
         }
         // turn on logging with undo mode for the replay device
-        cout << "Setting undo log on" << endl;
         ret = ioctl(fd_ioctl, LOGGER_UNDO_ON, NULL);
         if (ret < 0)
         {
@@ -2036,7 +2029,6 @@ namespace fs_testing
             close(fd_ioctl);
             return fd_ioctl;
         }
-        cout << "Turning undo logging on" << endl;
         ret = ioctl(fd_ioctl, LOGGER_LOG_ON, NULL);
         if (ret < 0)
         {
@@ -2048,11 +2040,9 @@ namespace fs_testing
         // clear dmesg logs so we can look at them for errors
         string command = "dmesg -C";
         system(command.c_str());
-        cout << "running check" << endl;
         passed = run_check(test_name, log, checkpoint, syscall_finished);
         // turn off logging and undo mode
         // we'll free the log later
-        cout << "turning logging off" << endl;
         ret = ioctl(fd_ioctl, LOGGER_LOG_OFF, NULL);
         if (ret < 0)
         {
@@ -2061,7 +2051,6 @@ namespace fs_testing
             close(fd_ioctl);
             return ret;
         }
-        cout << "turning off undo mode" << endl;
         ret = ioctl(fd_ioctl, LOGGER_UNDO_OFF, NULL);
         if (ret < 0)
         {
@@ -2073,7 +2062,6 @@ namespace fs_testing
 
         close(fd_ioctl);
 
-        cout << "replaying undo log" << endl;
         ret = play_undo_log(fd_replay, log);
         if (ret < 0)
         {
@@ -2443,7 +2431,6 @@ namespace fs_testing
         int fd;
         char *memset_buffer;
 
-        cout << "opening replica path " << replica_path << endl;
         fd = open(replica_path.c_str(), O_RDWR);
         if (fd < 0)
         {
@@ -2550,7 +2537,6 @@ namespace fs_testing
         diff_file << "# of CPUs: " << nthreads << endl;
         diff_file << "Mount opts: " << mount_opts << endl;
 
-        cout << "mount replay" << endl;
         ret = mount_replay();
         if (ret != 0)
         {
@@ -2563,7 +2549,6 @@ namespace fs_testing
             return false;
         }
         // check the contents of the file system based on the profiling
-        cout << "check fs contents2" << endl;
         retval = check_fs_contents2(checkpoint, diff_file, log, syscall_finished);
         if (!retval)
         {
