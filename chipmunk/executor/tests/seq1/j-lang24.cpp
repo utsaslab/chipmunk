@@ -81,12 +81,17 @@ namespace fs_testing {
 				}
 
 
+				if ( cm_->CmClose ( fd_ACbar) < 0){ 
+					return errno;
+				}
+
+
 				if ( cm_->CmMark() < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmLink (ACbar_path.c_str() , bar_path.c_str() ) < 0){ 
+				if ( cm_->CmUnlink(ACbar_path.c_str() ) < 0){ 
 					return errno;
 				}
 
@@ -97,11 +102,6 @@ namespace fs_testing {
 				local_checkpoint += 1; 
 				if (local_checkpoint == checkpoint) { 
 					return 0;
-				}
-
-
-				if ( cm_->CmClose ( fd_ACbar) < 0){ 
-					return errno;
 				}
 
                 return 0;

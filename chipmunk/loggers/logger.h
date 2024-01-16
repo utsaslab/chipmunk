@@ -275,7 +275,6 @@ int logger_ioctl(struct block_device* bdev, fmode_t mode, unsigned int cmd, unsi
             ret = insert_mark_sys(0, 1, (long) arg);
             break;
         case LOGGER_MARK:
-            printk(KERN_ALERT "inserted mount mark\n");
             ret = insert_mount_mark();
             break;
         case LOGGER_UNDO_ON:
@@ -366,11 +365,7 @@ int insert_mount_mark(void) {
 int insert_mark_sys(unsigned int sys, int end, long ret) {
     struct write_op* new_op;
 
-    // cout << "inserting mark sys " << sys << endl;
-    printk(KERN_ALERT "inserting mark sys %d\n", sys);
-
     if (Log.logging_on) {
-        printk(KERN_ALERT "actually inserting mark sys %d\n", sys);
         new_op = kzalloc(sizeof(struct write_op), GFP_KERNEL);
         if (new_op == NULL) {
             printk(KERN_ALERT "logger: could not allocate space for log entry\n");

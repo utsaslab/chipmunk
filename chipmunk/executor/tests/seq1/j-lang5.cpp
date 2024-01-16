@@ -82,11 +82,37 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmFallocate( fd_foo , FALLOC_FL_KEEP_SIZE , 0 , 1024) < 0){ 
-					cm_->CmClose( fd_foo);
-					 return errno;
+				cm_->CmClose(fd_foo); 
+				fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR , 0777); 
+				if ( fd_foo < 0 ) { 
+					cm_->CmClose( fd_foo); 
+					return errno;
 				}
 
+				void* data_foo;
+				if (posix_memalign(&data_foo , 4096, 1024 ) < 0) {
+					return errno;
+				}
+
+				 
+				int offset_foo = 0;
+				int to_writefoo = 1024 ;
+				const char *text_foo  = "ddddddddddklmnopqrstuvwxyz123456";
+				while (offset_foo < 1024){
+					if (to_writefoo < 32){
+						memcpy((char *)data_foo+ offset_foo, text_foo, to_writefoo);
+						offset_foo += to_writefoo;
+					}
+					else {
+						memcpy((char *)data_foo+ offset_foo,text_foo, 32);
+						offset_foo += 32; 
+					} 
+				} 
+
+				if ( cm_->CmPwrite ( fd_foo, data_foo, 1024, 0) < 0){
+					cm_->CmClose( fd_foo); 
+					return errno;
+				}
 
 				if ( cm_->CmCheckpoint() < 0){ 
 					return -1;
@@ -96,10 +122,6 @@ namespace fs_testing {
 					return 0;
 				}
 
-
-				if ( cm_->CmClose ( fd_foo) < 0){ 
-					return errno;
-				}
 
                 return 0;
             }

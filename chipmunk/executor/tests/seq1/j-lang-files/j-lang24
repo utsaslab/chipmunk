@@ -22,8 +22,8 @@ local_checkpoint
 mkdir A 0777
 mkdir AC 0777
 open ACbar O_RDWR|O_CREAT 0777
+close ACbar
 mark
-link ACbar bar
+unlink ACbar
 none
 checkpoint 0
-close ACbar

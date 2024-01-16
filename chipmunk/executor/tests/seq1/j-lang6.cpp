@@ -64,15 +64,14 @@ namespace fs_testing {
 				ACbar_path =  mnt_dir_ + "/A/C/bar";
 				int local_checkpoint = 0 ;
 
-				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_foo < 0 ) { 
-					cm_->CmClose( fd_foo); 
+				if ( cm_->CmMkdir(A_path.c_str() , 0777) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmWriteData ( fd_foo, 0, 4096) < 0){ 
-					cm_->CmClose( fd_foo); 
+				int fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_Afoo < 0 ) { 
+					cm_->CmClose( fd_Afoo); 
 					return errno;
 				}
 
@@ -82,11 +81,37 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmFallocate( fd_foo , FALLOC_FL_KEEP_SIZE , 3072 , 2048) < 0){ 
-					cm_->CmClose( fd_foo);
-					 return errno;
+				cm_->CmClose(fd_Afoo); 
+				fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR , 0777); 
+				if ( fd_Afoo < 0 ) { 
+					cm_->CmClose( fd_Afoo); 
+					return errno;
 				}
 
+				void* data_Afoo;
+				if (posix_memalign(&data_Afoo , 4096, 4096 ) < 0) {
+					return errno;
+				}
+
+				 
+				int offset_Afoo = 0;
+				int to_writeAfoo = 4096 ;
+				const char *text_Afoo  = "ddddddddddklmnopqrstuvwxyz123456";
+				while (offset_Afoo < 4096){
+					if (to_writeAfoo < 32){
+						memcpy((char *)data_Afoo+ offset_Afoo, text_Afoo, to_writeAfoo);
+						offset_Afoo += to_writeAfoo;
+					}
+					else {
+						memcpy((char *)data_Afoo+ offset_Afoo,text_Afoo, 32);
+						offset_Afoo += 32; 
+					} 
+				} 
+
+				if ( cm_->CmPwrite ( fd_Afoo, data_Afoo, 4096, 0) < 0){
+					cm_->CmClose( fd_Afoo); 
+					return errno;
+				}
 
 				if ( cm_->CmCheckpoint() < 0){ 
 					return -1;
@@ -96,10 +121,6 @@ namespace fs_testing {
 					return 0;
 				}
 
-
-				if ( cm_->CmClose ( fd_foo) < 0){ 
-					return errno;
-				}
 
                 return 0;
             }

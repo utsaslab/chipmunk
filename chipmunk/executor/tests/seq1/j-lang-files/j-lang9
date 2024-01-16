@@ -20,10 +20,9 @@ local_checkpoint
 
 # run
 mkdir A 0777
-open Afoo O_RDWR|O_CREAT 0777
-write Afoo 0 4096
+open foo O_RDWR|O_CREAT 0777
 mark
-falloc Afoo FALLOC_FL_KEEP_SIZE 3072 2048
+link foo Abar
 none
 checkpoint 0
-close Afoo
+close foo

@@ -21,9 +21,9 @@ local_checkpoint
 # run
 mkdir A 0777
 mkdir AC 0777
-open Afoo O_RDWR|O_CREAT 0777
-close Afoo
+open ACbar O_RDWR|O_CREAT 0777
+close ACbar
 mark
-rename Afoo ACbar
+rename ACbar Abar
 none
 checkpoint 0

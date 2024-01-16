@@ -19,9 +19,10 @@ local_checkpoint
 
 
 # run
-open bar O_RDWR|O_CREAT 0777
-close bar
+mkdir A 0777
+open Afoo O_RDWR|O_CREAT 0777
+close Afoo
 mark
-remove bar
+rename Afoo bar
 none
 checkpoint 0

@@ -1917,7 +1917,6 @@ namespace fs_testing
         // mounted, we can try to throw a crash in here
         // first: make a copy of the replay up to this point BEFORE
         // flushing these unordered writes
-        cout << "make and check crash states" << endl;
         if (fs_mounted && reorder)
         {
             sfence_count++;

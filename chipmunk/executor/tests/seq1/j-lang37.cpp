@@ -69,14 +69,19 @@ namespace fs_testing {
 				}
 
 
-				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_foo < 0 ) { 
-					cm_->CmClose( fd_foo); 
+				if ( cm_->CmMkdir(AC_path.c_str() , 0777) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmClose ( fd_foo) < 0){ 
+				int fd_bar = cm_->CmOpen(bar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_bar < 0 ) { 
+					cm_->CmClose( fd_bar); 
+					return errno;
+				}
+
+
+				if ( cm_->CmClose ( fd_bar) < 0){ 
 					return errno;
 				}
 
@@ -86,7 +91,7 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmRename (foo_path.c_str() , Abar_path.c_str() ) < 0){ 
+				if ( cm_->CmRename (bar_path.c_str() , ACbar_path.c_str() ) < 0){ 
 					return errno;
 				}
 

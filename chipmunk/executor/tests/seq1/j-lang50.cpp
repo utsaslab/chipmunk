@@ -69,29 +69,12 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmMkdir(B_path.c_str() , 0777) < 0){ 
-					return errno;
-				}
-
-
-				int fd_B = cm_->CmOpen(B_path.c_str() , O_DIRECTORY , 0777); 
-				if ( fd_B < 0 ) { 
-					cm_->CmClose( fd_B); 
-					return errno;
-				}
-
-
-				if ( cm_->CmClose ( fd_B) < 0){ 
-					return errno;
-				}
-
-
 				if ( cm_->CmMark() < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmRename (B_path.c_str() , AC_path.c_str() ) < 0){ 
+				if ( cm_->CmRmdir(A_path.c_str()) < 0){ 
 					return errno;
 				}
 

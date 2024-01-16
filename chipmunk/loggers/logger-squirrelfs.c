@@ -117,6 +117,8 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
                     new_op->metadata->seq_num = seq_num;
                     new_op->metadata->memset = 0;
 
+                    printk(KERN_INFO "[logger] memcpy len %llu dst %llx \n virt src %llx\n", len, new_op->metadata->dst, (unsigned long long)((void*)regs->si) + offset);
+
                     // allocate space for the data
                     new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
                     if (new_op->data == NULL)
@@ -133,17 +135,19 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
                     // because it's possible that the len value passed to the function
                     // could be greater than the amount of memory allocated for the buffer
 
-                    ret = copy_from_kernel_nofault(new_op->data, (void *)(regs->si), new_op->metadata->len);
+                    // ret = copy_from_kernel_nofault(new_op->data, (void *)(regs->si), new_op->metadata->len);
+                    ret = copy_from_user(new_op->data, (void*)(regs->si), new_op->metadata->len);
                     if (ret < 0)
                     {
                         // if the write is less than the size of a page, just try again
                         if (new_op->metadata->len < 4096)
                         {
-                            ret = copy_from_kernel_nofault(new_op->data, (void *)(regs->si), new_op->metadata->len);
+                            // ret = copy_from_kernel_nofault(new_op->data, (void *)(regs->si), new_op->metadata->len);
+                            ret = copy_from_user(new_op->data, (void *)(regs->si), new_op->metadata->len);
                             if (ret < 0)
                             {
                                 // if it still fails, fail the test
-                                printk(KERN_ALERT "A PROBE KERNEL READ IN MEMCPY FAILED\n");
+                                printk(KERN_ALERT "A PROBE KERNEL READ IN MEMCPY FAILED 1\n");
                                 printk(KERN_ALERT "could not read data in memcpy_to_pmem\n");
                                 kprobe_fail = 1;
                                 goto out;
@@ -164,16 +168,19 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
                                 to_write2 = len2 < 4096 ? len2 : 4096;
                                 len2 -= to_write2;
 
-                                ret = copy_from_kernel_nofault(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
+                                // ret = copy_from_kernel_nofault(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
+                                ret = copy_from_user(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
+
                                 if (ret < 0)
                                 {
                                     // try one more time
-                                    ret = copy_from_kernel_nofault(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
+                                    // ret = copy_from_kernel_nofault(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
+                                    ret = copy_from_user(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
                                     // TODO: what should we do if it fails the second time?
                                     if (ret < 0)
                                     {
                                         // if it still fails, fail the test
-                                        printk(KERN_ALERT "A PROBE KERNEL READ IN MEMCPY FAILED\n");
+                                        printk(KERN_ALERT "A PROBE KERNEL READ IN MEMCPY FAILED 2 %d\n", ret);
                                         printk(KERN_ALERT "could not read data in memcpy_to_pmem\n");
                                         kprobe_fail = 1;
                                         goto out;
@@ -300,7 +307,8 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
 
                     // copy the data to the log
                     // this function ensures that faults are handled correctly when reading data from user space
-                    ret = copy_from_kernel_nofault((new_op->data), (void *)(regs->si + offset), new_op->metadata->len);
+                    // ret = copy_from_kernel_nofault((new_op->data), (void *)(regs->si + offset), new_op->metadata->len);
+                    ret = copy_from_user((new_op->data), (void *)(regs->si + offset), new_op->metadata->len);
                     if (ret < 0)
                     {
                         printk(KERN_ALERT "failed down here\n");

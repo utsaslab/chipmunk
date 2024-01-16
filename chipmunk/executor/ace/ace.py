@@ -1651,7 +1651,8 @@ def main():
         FallocOptions = ['FALLOC_FL_KEEP_SIZE']
         # OperationSet = ['creat', 'mkdir', 'falloc', 'write', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'mmapwrite', 'symlink', 'rmdir']
         # OperationSet = ['creat', 'mkdir', 'falloc', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'symlink', 'rmdir']
-        OperationSet = ['creat', 'mkdir', 'falloc', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'rmdir']
+        # OperationSet = ['creat', 'mkdir', 'falloc', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'rmdir']
+        OperationSet = ['creat', 'mkdir', 'dwrite', 'link', 'unlink', 'remove', 'rename', 'truncate', 'rmdir']
     if int(num_ops) == 3:
         OperationSet = ['dwrite', 'link', 'unlink', 'rename']
 
