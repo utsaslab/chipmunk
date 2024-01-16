@@ -2679,21 +2679,17 @@ namespace fs_testing
 
                 // if the operation is a memset, we need to allocate a buffer for it here
                 if (current->metadata->memset == 1) {
-                    cout << "[1] handling memset of size " << current->metadata->len << endl;
                     int buffer_size;
                     if (current->metadata->len < 1024*1024) {
                         buffer_size = current->metadata->len;
                     } else {
                         buffer_size = 1024*1024;
                     }
-                    cout << buffer_size << endl;
                     memset_buffer = (char*)malloc(buffer_size);
                     if (memset_buffer == NULL) {
                         cout << "failed to allocate memory for memset buffer" << endl;
                         return -ENOMEM;
                     }
-                    cout << "allocated memory" << endl;
-                    cout << current->metadata->memset_val << endl;
                     memset(memset_buffer, current->metadata->memset_val, buffer_size);
                     int bytes_written = 0;
                     while (bytes_written < current->metadata->len) {
@@ -2715,7 +2711,6 @@ namespace fs_testing
                             return ret;
                         }
                     }
-                    cout << "done writing" << endl;
                 } else {
                     ret = pwrite(fd_replay, current->data, current->metadata->len, offset);
                     if (ret < 0)

@@ -34,7 +34,7 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
     // add an entry to the write log
     if (Log.logging_on && start >= pm_start && start < (pm_start + pm_size))
     {
-        len = regs->dx;
+        len = regs->si;
 
         // if len is greater than the size of the start address to the end of the
         // PM device, reduce it to that size. This will prevent weird errors
@@ -108,16 +108,15 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
                     // copy metadata to the log entry
                     // new_op->metadata->len = to_write;
                     new_op->metadata->len = to_write;
-                    new_op->metadata->src = (unsigned long long)(virt_to_phys((void *)(regs->si))) + offset;
+                    // new_op->metadata->src = (unsigned long long)(virt_to_phys((void *)(regs->si))) + offset;
                     // new_op->metadata->dst = (unsigned long long)(virt_to_phys((void*)(regs->di)))+offset;
+                    new_op->metadata->src = start + offset;
                     new_op->metadata->dst = start + offset;
                     new_op->metadata->type = NT;
                     new_op->metadata->likely_data = 1;
                     new_op->metadata->pid = current->pid;
                     new_op->metadata->seq_num = seq_num;
                     new_op->metadata->memset = 0;
-
-                    printk(KERN_INFO "[logger] memcpy len %llu dst %llx \n virt src %llx\n", len, new_op->metadata->dst, (unsigned long long)((void*)regs->si) + offset);
 
                     // allocate space for the data
                     new_op->data = kzalloc(new_op->metadata->len, GFP_NOWAIT);
@@ -136,14 +135,14 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
                     // could be greater than the amount of memory allocated for the buffer
 
                     // ret = copy_from_kernel_nofault(new_op->data, (void *)(regs->si), new_op->metadata->len);
-                    ret = copy_from_user(new_op->data, (void*)(regs->si), new_op->metadata->len);
+                    ret = copy_from_kernel_nofault(new_op->data, (void*)(regs->di), new_op->metadata->len);
                     if (ret < 0)
                     {
                         // if the write is less than the size of a page, just try again
                         if (new_op->metadata->len < 4096)
                         {
                             // ret = copy_from_kernel_nofault(new_op->data, (void *)(regs->si), new_op->metadata->len);
-                            ret = copy_from_user(new_op->data, (void *)(regs->si), new_op->metadata->len);
+                            ret = copy_from_kernel_nofault(new_op->data, (void *)(regs->di), new_op->metadata->len);
                             if (ret < 0)
                             {
                                 // if it still fails, fail the test
@@ -169,13 +168,13 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
                                 len2 -= to_write2;
 
                                 // ret = copy_from_kernel_nofault(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
-                                ret = copy_from_user(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
+                                ret = copy_from_kernel_nofault(new_op->data + offset2, (void *)(regs->di + offset2), to_write2);
 
                                 if (ret < 0)
                                 {
                                     // try one more time
                                     // ret = copy_from_kernel_nofault(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
-                                    ret = copy_from_user(new_op->data + offset2, (void *)(regs->si + offset2), to_write2);
+                                    ret = copy_from_kernel_nofault(new_op->data + offset2, (void *)(regs->di + offset2), to_write2);
                                     // TODO: what should we do if it fails the second time?
                                     if (ret < 0)
                                     {
@@ -285,8 +284,9 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
 
                     // copy metadata to the log entry
                     new_op->metadata->len = to_write;
-                    new_op->metadata->src = (unsigned long long)(virt_to_phys((void *)(regs->si))) + offset;
+                    // new_op->metadata->src = (unsigned long long)(virt_to_phys((void *)(regs->si))) + offset;
                     // new_op->metadata->dst = (unsigned long long)(virt_to_phys((void*)(regs->di)))+offset;
+                    new_op->metadata->src = start + offset;
                     new_op->metadata->dst = start + offset;
                     new_op->metadata->type = NT;
                     new_op->metadata->likely_data = 0;
@@ -308,7 +308,7 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
                     // copy the data to the log
                     // this function ensures that faults are handled correctly when reading data from user space
                     // ret = copy_from_kernel_nofault((new_op->data), (void *)(regs->si + offset), new_op->metadata->len);
-                    ret = copy_from_user((new_op->data), (void *)(regs->si + offset), new_op->metadata->len);
+                    ret = copy_from_kernel_nofault((new_op->data), (void *)(regs->di + offset), new_op->metadata->len);
                     if (ret < 0)
                     {
                         printk(KERN_ALERT "failed down here\n");
@@ -401,7 +401,7 @@ static int __kprobes memcpy_to_pmem_pre_handler(struct kprobe *p, struct pt_regs
                 goto out;
             }
             new_op->metadata->len = len;
-            new_op->metadata->src = (unsigned long long)(virt_to_phys((void *)(regs->si)));
+            new_op->metadata->src = (unsigned long long)(virt_to_phys((void *)(regs->di)));
             // TODO: we are ignoring the unaligned bytes issue so that we get all of the copied data
             // since this isn't used for crash consistency checking
             new_op->metadata->dst = (unsigned long long)(virt_to_phys((void *)(regs->di)));
@@ -935,7 +935,7 @@ static int memcpy_index = 0;
 static int find_memcpy_addrs(void *data, const char *namebuf,
                              struct module *module, unsigned long address)
 {
-    if (strncmp(namebuf, "rust_helper_copy_from_user_inatomic_nocache", strlen("rust_helper_copy_from_user_inatomic_nocache")) == 0)
+    if (strncmp(namebuf, "rust_helper_memcpy_hook", strlen("rust_helper_memcpy_hook")) == 0)
     {
         printk(KERN_INFO "%s\n", namebuf);
         ((unsigned long *)data)[memcpy_index] = address;
