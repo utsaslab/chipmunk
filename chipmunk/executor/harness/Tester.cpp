@@ -431,7 +431,6 @@ namespace fs_testing
         }
 
         oracle_state.test_name = test_name;
-
         ret = get_write_log(fd, log, checkpoint, reorder);
         if (ret < 0)
         {
@@ -452,7 +451,6 @@ namespace fs_testing
             return ret;
         }
         close(fd);
-
         // make sure the replay base file exists
         int base_fd = open(base_replay_path.c_str(), O_RDWR | O_CREAT, 0777);
         if (base_fd < 0)
@@ -562,6 +560,7 @@ namespace fs_testing
             if (new_op->metadata->type == CLWB || new_op->metadata->type == NT)
             {
                 // if this and the previous write log entries are part of the same data write,
+                // AND if neither is a memset,
                 // combine them into one larger write to reduce the number of outstanding writes
                 // when performing a larger data write
                 // TODO: this will be kind of slow for large data writes that are split up into
@@ -569,7 +568,8 @@ namespace fs_testing
                 // however, we only do it once per test, so it's not a HUGE deal
                 // TODO: this is VERY slow for ext4 dax - right now we just don't do it since we don't reorder those writes anyway
                 if (head != NULL && new_op->metadata->likely_data && tail->metadata->likely_data &&
-                    new_op->metadata->dst == (tail->metadata->dst + tail->metadata->len))
+                    new_op->metadata->dst == (tail->metadata->dst + tail->metadata->len) &&
+                    new_op->metadata->memset == 0 && tail->metadata->memset == 0)
                 {
                     // increase tail entry's length
                     // tail->metadata->len += new_op->metadata->len;
@@ -622,8 +622,19 @@ namespace fs_testing
                             free(new_op->metadata);
                             return ioctl_val;
                         }
-                    } else {
-                    }
+                    } 
+                    // else {
+                    //     new_op->data = malloc(1);
+                    //     memset(new_op->data, 0, 1);
+                    //     ioctl_val = ioctl(fd, LOGGER_GET_DATA, new_op->data);
+                    //     if (ioctl_val < 0)
+                    //     {
+                    //         perror("LOGGER_GET_DATA");
+                    //         free(new_op->data);
+                    //         free(new_op->metadata);
+                    //         return ioctl_val;
+                    //     }
+                    // }
                 }
             }
             else if (new_op->metadata->type == MARK_SYS)
@@ -2704,12 +2715,12 @@ namespace fs_testing
                             perror("pwrite 3");
                             return ret;
                         }
-                        bytes_written += ret;
                         ret = pwrite(fd_base, memset_buffer, bytes_to_write, offset + bytes_written);
                         if (ret < 0) {
                             perror("pwrite 4");
                             return ret;
                         }
+                        bytes_written += ret;
                     }
                 } else {
                     ret = pwrite(fd_replay, current->data, current->metadata->len, offset);

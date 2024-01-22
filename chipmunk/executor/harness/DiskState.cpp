@@ -349,7 +349,6 @@ bool DiskState::check_creat_and_mkdir(std::string path, ofstream& diff_file, ofs
     if (present_in_crash_state) {
         // if the file is present in the crash state, it should match the most recent version 
         // in the oracle.
-        
         states_match = oracle_file_state->compare(&crash_file_state, diff_file);
     }
 
