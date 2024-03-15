@@ -2,6 +2,17 @@
 
 Chipmunk is a framework for testing persistent-memory (PM) file systems for crash consistency bugs. Using Chipmunk, we found 23 new bugs in 5 PM file systems. This repository includes the Chipmunk test harness, the Syzkaller fuzzer, and the ACE systematic workload generator. 
 
+Please cite the following paper if you use Chipmunk:
+```
+@inproceedings {chipmunk-eurosys23,
+    author = {Hayley LeBlanc and Shankara Pailoor and Om Saran and Isil Dillig and James Bornholt and Vijay Chidambaram}
+    title = "{Chipmunk: Investigating Crash-Consistency in Persistent-Memory File Systems}",
+    booktitle = {EuroSys '23: Eighteenth European Conference on Computer Systems},
+    year = {2023},
+    month = may,
+ }
+```
+
 ## System requirements
 - Ubuntu 20.04
 - At least 8GB of RAM
